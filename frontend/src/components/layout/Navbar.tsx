@@ -15,6 +15,7 @@ import {
   Clock, 
   UserPlus, 
   CheckCheck,
+  Trash2,
   ChevronRight,
   X
 } from 'lucide-react';
@@ -35,6 +36,7 @@ export const Navbar = () => {
   
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
+  const clearedNotificationIds = useRef<Set<number>>(new Set());
   
   const notificationsRef = useRef<HTMLDivElement>(null);
 
@@ -48,8 +50,11 @@ export const Navbar = () => {
     if (!isAuthenticated || !user?.email) return;
     try {
       const data = await notificationsApi.getNotifications(user.email, isAdmin);
-      setNotifications(data.notifications || []);
-      setUnreadCount(data.unread_count || 0);
+      const visibleNotifications = (data.notifications || []).filter(
+        notification => !clearedNotificationIds.current.has(notification.id)
+      );
+      setNotifications(visibleNotifications);
+      setUnreadCount(visibleNotifications.filter(notification => !notification.is_read).length);
     } catch (err) {
       console.error('Failed to fetch notifications:', err);
     }
@@ -175,6 +180,12 @@ export const Navbar = () => {
     await notificationsApi.markAllAsRead(user.email, isAdmin);
   };
 
+  const handleClearAll = () => {
+    notifications.forEach(notification => clearedNotificationIds.current.add(notification.id));
+    setNotifications([]);
+    setUnreadCount(0);
+  };
+
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-gray-200 bg-[#faf9f6]/80 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -266,6 +277,15 @@ export const Navbar = () => {
                             >
                               <CheckCheck className="w-3.5 h-3.5" />
                               Mark all read
+                            </button>
+                          )}
+                          {notifications.length > 0 && (
+                            <button
+                              onClick={handleClearAll}
+                              className="flex items-center gap-1 text-xs text-gray-500 hover:text-rose-600 transition-colors font-medium"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Clear all
                             </button>
                           )}
                         </div>
@@ -466,6 +486,14 @@ export const Navbar = () => {
                   className="text-xs text-gray-500 font-medium"
                 >
                   Mark all read
+                </button>
+              )}
+              {notifications.length > 0 && (
+                <button
+                  onClick={handleClearAll}
+                  className="text-xs text-gray-500 font-medium"
+                >
+                  Clear all
                 </button>
               )}
               <button onClick={() => setMobileNotifsOpen(false)} className="text-gray-400 p-1">
