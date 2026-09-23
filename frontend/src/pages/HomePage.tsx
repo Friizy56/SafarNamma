@@ -121,7 +121,7 @@ const Hero: React.FC<{ placeCount: number }> = ({ placeCount }) => {
         ))}
       </svg>
 
-      <div className="relative max-w-7xl mx-auto px-6 sm:px-10 grid lg:grid-cols-12 gap-14 lg:gap-8 items-center">
+      <div className="relative max-w-7xl mx-auto px-page grid lg:grid-cols-12 gap-14 lg:gap-8 items-center">
         {/* Copy */}
         <motion.div className="lg:col-span-6 relative z-10" style={reduced ? undefined : { y: textY, opacity: textOpacity }}>
           {liveCount !== null && (
@@ -413,7 +413,7 @@ const FeaturedPlaces: React.FC<{ places: Place[]; total: number }> = ({ places, 
   const displayPlaces: PlaceCardData[] = places.length > 0 ? places.slice(0, 4) : SEED_PLACES;
 
   return (
-    <section className="py-24 px-6 sm:px-10 max-w-7xl mx-auto w-full">
+    <section className="py-24 px-page max-w-7xl mx-auto w-full">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 mb-14">
         <div>
           <Reveal>
@@ -449,7 +449,7 @@ const CommunitySection: React.FC = () => (
       <div className="absolute inset-0 bg-gradient-to-r from-night/95 via-night/55 to-night/5" />
       <div className="absolute inset-0 bg-gradient-to-t from-night/80 via-transparent to-transparent" />
 
-      <div className="on-photo relative z-10 max-w-7xl mx-auto w-full px-6 sm:px-12 py-16 sm:py-20">
+      <div className="on-photo relative z-10 max-w-7xl mx-auto w-full px-page py-16 sm:py-20">
         <div className="max-w-xl">
           <Reveal>
             <p className="section-label mb-5">Travel groups</p>
@@ -483,7 +483,7 @@ const CommunitySection: React.FC = () => (
    ACTIVE GROUPS
    ════════════════════════════════════════ */
 const ActiveGroups: React.FC<{ groups: Group[] }> = ({ groups }) => (
-  <section className="py-24 px-6 sm:px-10 max-w-7xl mx-auto w-full">
+  <section className="py-24 px-page max-w-7xl mx-auto w-full">
     <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 mb-14">
       <div>
         <Reveal>
@@ -550,7 +550,7 @@ const HowItWorks: React.FC = () => {
   ];
 
   return (
-    <section className="py-28 px-6 sm:px-10 bg-sand">
+    <section className="py-28 px-page bg-sand">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-16">
           <Reveal>

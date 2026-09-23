@@ -1,16 +1,18 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
 import { PHOTO_CREDITS } from '../../utils/images';
 import { Reveal } from '../motion/Reveal';
+import { scrollToTop } from '../../hooks/useLenis';
 
 const DISCOVER = ['Nature', 'Monuments', 'Cafes & Restaurants', 'Games & Adventure', 'Religious Places'];
 
 export const Footer = () => {
   const year = new Date().getFullYear();
+  const { pathname } = useLocation();
 
   return (
     <footer className="band-night relative overflow-hidden">
-      <div className="max-w-7xl mx-auto px-6 sm:px-10 pt-24 pb-10">
+      <div className="max-w-7xl mx-auto px-page pt-24 pb-10">
         {/* Sign-off */}
         <Reveal className="flex flex-col lg:flex-row lg:items-end justify-between gap-10 pb-16 border-b border-white/10">
           <div>
@@ -20,10 +22,19 @@ export const Footer = () => {
             </h2>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Link to="/explore" className="btn-primary">
+            <Link
+              to="/explore"
+              onClick={() => {
+                if (pathname !== '/explore') return;
+                scrollToTop();
+                // Already on Explore: land the visitor in the search box
+                requestAnimationFrame(() => document.getElementById('explore-search')?.focus({ preventScroll: true }));
+              }}
+              className="btn-primary"
+            >
               Find a place <ArrowUpRight className="w-4 h-4" />
             </Link>
-            <Link to="/groups" className="btn-ghost">
+            <Link to="/groups" onClick={() => pathname === '/groups' && scrollToTop()} className="btn-ghost">
               Join a trip
             </Link>
           </div>

@@ -28,6 +28,12 @@ export function useLenis() {
   }, [pathname]);
 }
 
+/** Jump back to the top (used when a link points at the current page, so the route-change jump never fires). */
+export function scrollToTop() {
+  lenis?.scrollTo(0, { immediate: true, force: true });
+  window.scrollTo(0, 0);
+}
+
 /** Pause page scrolling while a modal or sheet is open. */
 export function setScrollLocked(locked: boolean) {
   if (lenis) {

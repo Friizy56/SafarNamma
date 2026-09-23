@@ -246,7 +246,7 @@ export const PlaceDetailsPage = () => {
     return (
       <div className="w-full bg-sand min-h-screen">
         <div className="bg-night h-[640px]" />
-        <div className="max-w-7xl mx-auto px-6 sm:px-10 -mt-24 space-y-8">
+        <div className="max-w-7xl mx-auto px-page -mt-24 space-y-8">
           <div className="skeleton h-28 w-full rounded-[28px]" />
           <div className="grid lg:grid-cols-[1fr_380px] gap-14">
             <div className="space-y-4">
@@ -398,7 +398,7 @@ export const PlaceDetailsPage = () => {
       )}
 
       {/* ── Story + weekend pass ── */}
-      <div className="max-w-7xl mx-auto px-6 sm:px-10 pt-24 pb-24 grid lg:grid-cols-[minmax(0,1fr)_380px] gap-14 lg:gap-20">
+      <div className="max-w-7xl mx-auto px-page pt-24 pb-24 grid lg:grid-cols-[minmax(0,1fr)_380px] gap-14 lg:gap-20">
         <div className="min-w-0 space-y-24">
           {/* About */}
           <section>
@@ -634,7 +634,7 @@ export const PlaceDetailsPage = () => {
       {/* ── More places ── */}
       {related.length > 0 && (
         <section className="border-t border-line bg-paper/60">
-          <div className="max-w-7xl mx-auto px-6 sm:px-10 py-24">
+          <div className="max-w-7xl mx-auto px-page py-24">
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 mb-12">
               <div>
                 <Reveal>

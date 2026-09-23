@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, MapPin, CheckCircle, Info, IndianRupee, List, Navigation, Clock } from 'lucide-react';
+import { Save, MapPin, CheckCircle, Info, IndianRupee, List, Navigation, Clock, CalendarDays } from 'lucide-react';
 import { placesApi } from '../api/client';
 import { Link, useParams } from 'react-router-dom';
 import type { Place } from '../types';
@@ -88,6 +88,7 @@ export const EditPlacePage = () => {
         closing_hours: data.closing_hours,
         transport_options: data.transport_options,
         nearby_facilities: data.nearby_facilities,
+        best_season: data.best_season?.trim() ?? '',
       });
 
       if (success) {
@@ -106,7 +107,7 @@ export const EditPlacePage = () => {
 
   if (isSuccess) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 flex items-center justify-center min-h-[70vh]">
+      <div className="max-w-7xl mx-auto px-page py-20 flex items-center justify-center min-h-[70vh]">
         <div className="max-w-lg w-full bg-white p-10 rounded-3xl border border-gray-100 shadow-2xl text-center transform transition-all relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-green-50 rounded-full blur-3xl -mr-32 -mt-32 opacity-60 pointer-events-none"></div>
 
@@ -142,14 +143,14 @@ export const EditPlacePage = () => {
 
   if (!place) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-32 text-center">
+      <div className="max-w-4xl mx-auto px-page py-32 text-center">
         <p className="text-gray-500 text-lg animate-pulse">Loading destination details...</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full relative">
+    <div className="max-w-4xl mx-auto px-page py-12 w-full relative">
       {/* Decorative background blur */}
       <div className="absolute top-20 left-0 w-72 h-72 bg-orange-50 rounded-full blur-3xl -ml-32 opacity-60 pointer-events-none z-0"></div>
 
@@ -359,6 +360,21 @@ export const EditPlacePage = () => {
                 />
                 <p className="text-xs text-gray-500">Separate items with commas so they render as bullet points.</p>
                 {errors.nearby_facilities && <p className="text-sm text-rose-500 mt-1 flex items-center gap-1"><Info className="w-4 h-4" /> {errors.nearby_facilities}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="best_season" className="block text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                  <CalendarDays className="w-4 h-4 text-gray-400" /> Best Season <span className="text-xs font-normal text-gray-500">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  id="best_season"
+                  name="best_season"
+                  defaultValue={place.best_season || ''}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 font-medium focus:ring-4 focus:ring-[#f97316]/20 focus:border-[#f97316] outline-none transition-all"
+                  placeholder="e.g. October - March (Winter)"
+                />
+                <p className="text-xs text-gray-500">Leave blank to show "All year" on the place page.</p>
               </div>
             </div>
           </div>

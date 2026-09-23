@@ -81,7 +81,7 @@ const HowItWorks = () => {
       {/* Desktop: pinned story */}
       <section ref={ref} className="relative hidden lg:block bg-night grain" style={{ height: reduced ? 'auto' : `${STEPS.length * 90 + 10}vh` }}>
         <div className={cn('top-0 h-screen overflow-hidden', !reduced && 'sticky')}>
-          <div className="max-w-7xl mx-auto h-full px-10 grid grid-cols-12 gap-10 items-center">
+          <div className="max-w-7xl mx-auto h-full px-page grid grid-cols-12 gap-10 items-center">
             <div className="col-span-5 on-photo">
               <p className="section-label mb-5">How travel groups work</p>
               <h2 className="text-display text-sand mb-12" style={{ fontSize: 'clamp(2.5rem, 4.4vw, 4rem)' }}>
@@ -396,7 +396,7 @@ export const GroupsPage = () => {
 
         <motion.div
           style={reduced ? undefined : { y: textY, opacity: textOpacity }}
-          className="on-photo relative z-10 h-full max-w-7xl mx-auto px-6 sm:px-10 flex flex-col justify-end pb-16 sm:pb-20"
+          className="on-photo relative z-10 h-full max-w-7xl mx-auto px-page flex flex-col justify-end pb-16 sm:pb-20"
         >
           <p className="section-label mb-6 animate-fade-up">Travel groups · Bengaluru</p>
           <SplitHeading
@@ -437,7 +437,7 @@ export const GroupsPage = () => {
       </section>
 
       {/* ── Trust strip ── */}
-      <div className="max-w-7xl mx-auto w-full px-4 sm:px-10 -mt-2 relative z-10">
+      <div className="max-w-7xl mx-auto w-full px-4 sm:px-page -mt-2 relative z-10">
         <Reveal className="card card-shadow flex items-start sm:items-center gap-4 p-5 sm:px-7">
           <span className="w-11 h-11 rounded-2xl bg-sage-soft text-sage-text flex items-center justify-center shrink-0">
             <ShieldCheck className="w-5 h-5" />
@@ -450,8 +450,8 @@ export const GroupsPage = () => {
 
       {/* ── Filters (sticky only while the trips are on screen) + trips ── */}
       <div>
-      <div className="sticky z-30 top-[5.6rem] mt-8">
-        <div className="max-w-7xl mx-auto px-3 sm:px-10">
+      <div className="sticky z-30 top-[6.75rem] mt-8">
+        <div className="max-w-7xl mx-auto px-3 sm:px-page">
           <div className="glass rounded-full card-shadow flex items-center gap-2 p-2">
             <div className="flex items-center gap-2 overflow-x-auto scrollbar-none flex-1 min-w-0" data-lenis-prevent>
               {QUICK_FILTERS.map((f) => (
@@ -468,7 +468,7 @@ export const GroupsPage = () => {
       </div>
 
       {/* ── Trips ── */}
-      <section ref={gridRef} className="max-w-7xl mx-auto w-full px-6 sm:px-10 pt-16 pb-28 scroll-mt-40">
+      <section ref={gridRef} className="max-w-7xl mx-auto w-full px-page pt-16 pb-28 scroll-mt-40">
         <Reveal className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
           <div>
             <p className="section-label mb-4">{targetPlace ? 'Trips to' : 'Coming up'}</p>
@@ -567,7 +567,7 @@ export const GroupsPage = () => {
       <HowItWorks />
 
       {/* ── Closing call ── */}
-      <section className="max-w-7xl mx-auto w-full px-6 sm:px-10 py-28">
+      <section className="max-w-7xl mx-auto w-full px-page py-28">
         <Reveal className="grid lg:grid-cols-2 gap-10 items-center">
           <div>
             <p className="section-label mb-5">Can't find your trip?</p>

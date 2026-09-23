@@ -330,7 +330,7 @@ export const UserProfilePage = () => {
           <div className="absolute inset-0 bg-gradient-to-t from-night/85 via-transparent to-night/40" />
         </motion.div>
 
-        <div className="on-photo relative z-10 max-w-7xl mx-auto px-6 sm:px-10">
+        <div className="on-photo relative z-10 max-w-7xl mx-auto px-page">
           <div className="flex flex-col lg:flex-row lg:items-end gap-10 lg:gap-14">
             {/* Avatar + stamp with direct upload & replace option */}
             <div className="relative shrink-0 self-start">
@@ -420,7 +420,7 @@ export const UserProfilePage = () => {
       </section>
 
       {/* ═══ Stats card (overlaps the hero) ═══ */}
-      <div className="relative z-20 max-w-7xl mx-auto px-4 sm:px-10 -mt-16">
+      <div className="relative z-20 max-w-7xl mx-auto px-4 sm:px-page -mt-16">
         <Reveal className="rounded-[28px] overflow-hidden border border-line bg-[#E3DACB] card-shadow-hover grid grid-cols-2 lg:grid-cols-4 gap-px">
           {stats.map((s) => (
             <div key={s.l} className="bg-paper p-6 sm:p-7">
@@ -434,7 +434,7 @@ export const UserProfilePage = () => {
       </div>
 
       {/* ═══ Collections ═══ */}
-      <section className="max-w-7xl mx-auto px-6 sm:px-10 pt-20 pb-28">
+      <section className="max-w-7xl mx-auto px-page pt-20 pb-28">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
           <div>
             <Reveal>

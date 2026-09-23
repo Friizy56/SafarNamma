@@ -161,7 +161,7 @@ export const GroupDetailsPage = () => {
     return (
       <div className="w-full bg-sand min-h-screen">
         <div className="bg-night h-[600px]" />
-        <div className="max-w-7xl mx-auto px-6 sm:px-10 -mt-24 space-y-8">
+        <div className="max-w-7xl mx-auto px-page -mt-24 space-y-8">
           <div className="skeleton h-28 w-full rounded-[28px]" />
           <div className="grid lg:grid-cols-[1fr_380px] gap-14">
             <div className="space-y-4">
@@ -272,7 +272,7 @@ export const GroupDetailsPage = () => {
       {/* ── Key facts ── */}
       <FactsCard facts={facts} />
 
-      <div className="max-w-7xl mx-auto px-6 sm:px-10 pt-24 pb-28 grid lg:grid-cols-[minmax(0,1fr)_380px] gap-14 lg:gap-20">
+      <div className="max-w-7xl mx-auto px-page pt-24 pb-28 grid lg:grid-cols-[minmax(0,1fr)_380px] gap-14 lg:gap-20">
         <div className="min-w-0 space-y-20">
           {/* The plan */}
           <section>

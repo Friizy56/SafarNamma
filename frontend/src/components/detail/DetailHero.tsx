@@ -62,7 +62,7 @@ export const DetailHero = ({ photos, fallback, eyebrow, title, meta, actions, ph
       <div className="absolute inset-0 bg-gradient-to-r from-night via-night/80 to-night/40" />
       <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-night to-transparent" />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-10 grid lg:grid-cols-12 gap-12 lg:gap-10 items-center">
+      <div className="relative z-10 max-w-7xl mx-auto px-page grid lg:grid-cols-12 gap-12 lg:gap-10 items-center">
         <motion.div className="on-photo lg:col-span-6" style={reduced ? undefined : { y: textY }}>
           {eyebrow && <div className="mb-6 animate-fade-up">{eyebrow}</div>}
           {title}
@@ -99,7 +99,7 @@ export const DetailHero = ({ photos, fallback, eyebrow, title, meta, actions, ph
 export const FactsCard = ({ facts }: { facts: { icon: React.ComponentType<{ className?: string }>; label: string; value: ReactNode }[] }) => {
   const reduced = useReducedMotion();
   return (
-    <div className="relative z-20 max-w-7xl mx-auto px-4 sm:px-10 -mt-24">
+    <div className="relative z-20 max-w-7xl mx-auto px-4 sm:px-page -mt-24">
       <motion.dl
         initial={reduced ? false : 'hidden'}
         animate="show"

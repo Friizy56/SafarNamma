@@ -235,7 +235,7 @@ export const AdminDashboard = () => {
   });
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-12">
+    <div className="max-w-7xl mx-auto px-page py-12">
       {/* Dashboard Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
         <div>

@@ -58,9 +58,9 @@ const StripPhoto = ({ src, alt, index, total, fallback, onOpen }: { src: string;
 export const PhotoStrip: React.FC<StripProps> = ({ photos, name, fallback, onOpen }) => (
   <HorizontalScroller
     className="bg-sand"
-    trackClassName="px-6 sm:px-10 lg:pl-[max(2.5rem,calc((100vw-80rem)/2+2.5rem))] lg:pr-10 items-start"
+    trackClassName="px-page lg:pl-[max(var(--page-gutter),calc((100vw-80rem)/2+var(--page-gutter)))] items-start"
     header={
-      <div className="max-w-7xl w-full mx-auto px-6 sm:px-10 pt-20 lg:pt-0 mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div className="max-w-7xl w-full mx-auto px-page pt-20 lg:pt-0 mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <p className="section-label mb-4">Photo story · {photos.length} shots</p>
           <SplitHeading className="text-display text-ink" style={{ fontSize: 'clamp(2rem, 4vw, 3.25rem)' }} parts={[{ text: 'See it before' }, { text: 'you go.', accent: true }]} />

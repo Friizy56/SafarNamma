@@ -258,7 +258,7 @@ export const SubmitPlacePage = () => {
   /* ── Success ── */
   if (isSuccess) {
     return (
-      <div className="bg-sand pt-32 pb-24 px-6 sm:px-10">
+      <div className="bg-sand pt-32 pb-24 px-page">
         <motion.div
           initial={reduced ? false : { opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -306,7 +306,7 @@ export const SubmitPlacePage = () => {
           className="absolute inset-0 w-full h-full object-cover object-[center_65%] animate-fade-in"
         />
         <div className="absolute inset-0 hero-scrim" />
-        <div className="on-photo relative z-10 h-full max-w-6xl mx-auto px-6 sm:px-10 flex flex-col justify-end pb-36">
+        <div className="on-photo relative z-10 h-full max-w-6xl mx-auto px-page flex flex-col justify-end pb-36">
           <p className="section-label mb-5 animate-fade-up">Community · Share a place</p>
           <SplitHeading
             as="h1"
@@ -324,7 +324,7 @@ export const SubmitPlacePage = () => {
       </section>
 
       {/* ── Form + live preview ── */}
-      <div ref={formTopRef} className="relative z-10 max-w-6xl mx-auto px-4 sm:px-10 -mt-24 pb-28 scroll-mt-28">
+      <div ref={formTopRef} className="relative z-10 max-w-6xl mx-auto px-4 sm:px-page -mt-24 pb-28 scroll-mt-28">
         <div className="grid lg:grid-cols-[minmax(0,1fr)_340px] gap-10 items-start">
           <motion.div
             initial={reduced ? false : { opacity: 0, y: 40 }}

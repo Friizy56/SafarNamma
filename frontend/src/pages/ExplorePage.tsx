@@ -229,7 +229,7 @@ export const ExplorePage = () => {
 
         <motion.div
           style={reduced ? undefined : { y: textY, opacity: textOpacity }}
-          className="on-photo relative z-10 h-full max-w-7xl mx-auto px-6 sm:px-10 flex flex-col justify-end pb-16 sm:pb-20"
+          className="on-photo relative z-10 h-full max-w-7xl mx-auto px-page flex flex-col justify-end pb-16 sm:pb-20"
         >
           <SplitHeading
             as="h1"
@@ -301,8 +301,8 @@ export const ExplorePage = () => {
       </section>
 
       {/* ── Sticky filter bar ── */}
-      <div className="sticky z-30 top-[5.6rem] mt-2">
-        <div className="max-w-7xl mx-auto px-3 sm:px-10">
+      <div className="sticky z-30 top-[6.75rem] mt-2">
+        <div className="max-w-7xl mx-auto px-3 sm:px-page">
           <div className="glass rounded-full card-shadow flex items-center gap-2 pl-2 pr-2 py-2">
             <div className="flex items-center gap-2 overflow-x-auto scrollbar-none flex-1 min-w-0" data-lenis-prevent>
               <Chip group="cat" active={categoryFilter === ''} onClick={() => updateParam('category', '')}>
@@ -330,9 +330,9 @@ export const ExplorePage = () => {
       {showStrip && (
         <HorizontalScroller
           className="bg-sand"
-          trackClassName="px-6 sm:px-10 lg:pl-[max(2.5rem,calc((100vw-80rem)/2+2.5rem))] lg:pr-10"
+          trackClassName="px-page lg:pl-[max(var(--page-gutter),calc((100vw-80rem)/2+var(--page-gutter)))]"
           header={
-            <div className="max-w-7xl w-full mx-auto px-6 sm:px-10 pt-20 lg:pt-0 mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div className="max-w-7xl w-full mx-auto px-page pt-20 lg:pt-0 mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
               <div>
                 <p className="section-label mb-4">{strip.kind === 'gems' ? 'Hidden gems' : 'Top rated'}</p>
                 <SplitHeading
@@ -360,7 +360,7 @@ export const ExplorePage = () => {
       )}
 
       {/* ── Results ── */}
-      <section ref={resultsRef} className="max-w-7xl mx-auto w-full px-6 sm:px-10 pt-20 pb-28 flex-grow scroll-mt-40">
+      <section ref={resultsRef} className="max-w-7xl mx-auto w-full px-page pt-20 pb-28 flex-grow scroll-mt-40">
         <Reveal className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 mb-12">
           <div>
             <p className="section-label mb-4">{categoryFilter || (query ? 'Search results' : 'All places')}</p>
@@ -488,7 +488,7 @@ export const ExplorePage = () => {
       </section>
 
       {/* ── Closing call to contribute ── */}
-      <section className="max-w-7xl mx-auto w-full px-6 sm:px-10 pb-28">
+      <section className="max-w-7xl mx-auto w-full px-page pb-28">
         <Reveal className="relative overflow-hidden rounded-[32px] bg-night min-h-[360px] flex items-end grain">
           <img {...photoProps('coorgFalls', '(min-width: 1024px) 80vw, 100vw')} loading="lazy" className="absolute inset-0 w-full h-full object-cover opacity-70" />
           <div className="absolute inset-0 bg-gradient-to-r from-night via-night/70 to-transparent" />
