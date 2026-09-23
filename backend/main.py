@@ -584,7 +584,7 @@ def get_user_profile(email: str, db: Session = Depends(get_db)):
 @app.put("/api/users/profile" , response_model = schemas.UserResponse)
 def update_user_profile(user_data : schemas.UserUpdate , db : Session = Depends(get_db)):
 
-    user = db.query(models.User).filter(models.User.email == user_data.email).first()
+    user = db.query(models.User).filter(models.User.email.ilike(user_data.email)).first()
 
     if not user :
 

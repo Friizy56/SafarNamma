@@ -16,8 +16,15 @@ import {
   ArrowUpRight,
   Pencil,
   Quote,
-  ImageIcon,
+  Camera,
+  Upload,
+  Loader2,
+  RefreshCw,
+  Trash2,
+  Check,
+  ImagePlus,
 } from 'lucide-react';
+import { uploadImageToCloudinary } from '../utils/cloudinary';
 import { useAuth } from '../context/AuthContext';
 import { useFavorites } from '../context/FavoritesContext';
 import { submissionsApi, groupsApi } from '../api/client';
@@ -148,6 +155,14 @@ export const UserProfilePage = () => {
     bio: user?.bio || '',
     avatar_url: user?.avatar_url || '',
   });
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [avatarUploadError, setAvatarUploadError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  // Direct hero photo upload (can change multiple times right from profile)
+  const [isUploadingHeroAvatar, setIsUploadingHeroAvatar] = useState(false);
+  const heroAvatarInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch places submitted by this user
   useEffect(() => {
@@ -210,14 +225,67 @@ export const UserProfilePage = () => {
   const joinDate = validJoin ? joined!.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Recently';
   const joinYear = validJoin ? String(joined!.getFullYear()) : String(new Date().getFullYear());
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAvatarUploadError(null);
+    setIsUploadingAvatar(true);
+
+    try {
+      const url = await uploadImageToCloudinary(file);
+      setFormData((prev) => ({ ...prev, avatar_url: url }));
+    } catch (err: any) {
+      setAvatarUploadError(err.message || 'Failed to upload photo to Cloudinary.');
+    } finally {
+      setIsUploadingAvatar(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveAvatar = () => {
+    setFormData((prev) => ({ ...prev, avatar_url: '' }));
+    setAvatarUploadError(null);
+    if (avatarInputRef.current) avatarInputRef.current.value = '';
+  };
+
+  // Direct hero upload: uploads to Cloudinary and merges directly into the users table avatar column
+  const handleDirectHeroAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingHeroAvatar(true);
+    try {
+      const url = await uploadImageToCloudinary(file);
+      await updateUser({
+        avatar_url: url,
+      });
+      setFormData((prev) => ({ ...prev, avatar_url: url }));
+    } catch (err: any) {
+      console.error('Failed to upload avatar from hero:', err);
+      alert(err.message || 'Failed to upload photo to Cloudinary.');
+    } finally {
+      setIsUploadingHeroAvatar(false);
+      if (heroAvatarInputRef.current) heroAvatarInputRef.current.value = '';
+    }
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateUser({
-      name: formData.name.trim() || user.name,
-      bio: formData.bio.trim(),
-      avatar_url: formData.avatar_url.trim(),
-    });
-    setIsEditing(false);
+    if (isUploadingAvatar) return;
+    setIsSaving(true);
+    try {
+      await updateUser({
+        name: formData.name.trim() || user.name,
+        bio: formData.bio.trim(),
+        avatar_url: formData.avatar_url.trim(),
+      });
+      setIsEditing(false);
+    } catch (err) {
+      console.error('Failed to update profile:', err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const openEditor = () => {
@@ -226,6 +294,7 @@ export const UserProfilePage = () => {
       bio: user.bio || '',
       avatar_url: user.avatar_url || '',
     });
+    setAvatarUploadError(null);
     setIsEditing(true);
   };
 
@@ -263,19 +332,47 @@ export const UserProfilePage = () => {
 
         <div className="on-photo relative z-10 max-w-7xl mx-auto px-6 sm:px-10">
           <div className="flex flex-col lg:flex-row lg:items-end gap-10 lg:gap-14">
-            {/* Avatar + stamp */}
+            {/* Avatar + stamp with direct upload & replace option */}
             <div className="relative shrink-0 self-start">
               <motion.div
                 initial={reduced ? false : { clipPath: 'inset(100% 0% 0% 0% round 36px)' }}
                 animate={{ clipPath: 'inset(0% 0% 0% 0% round 36px)' }}
                 transition={{ duration: 1.2, ease: EASE, delay: 0.1 }}
-                className="w-40 h-40 sm:w-48 sm:h-48 rounded-[36px] overflow-hidden bg-accent text-white flex items-center justify-center font-display text-7xl ring-1 ring-white/15 shadow-[0_40px_80px_-30px_rgba(0,0,0,0.8)]"
+                onClick={() => heroAvatarInputRef.current?.click()}
+                className="group relative cursor-pointer w-40 h-40 sm:w-48 sm:h-48 rounded-[36px] overflow-hidden bg-accent text-white flex items-center justify-center font-display text-7xl ring-1 ring-white/15 shadow-[0_40px_80px_-30px_rgba(0,0,0,0.8)]"
+                title="Click to upload or change profile photo"
               >
-                {user.avatar_url ? <img src={user.avatar_url} alt={user.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" /> : initial}
+                {user.avatar_url ? (
+                  <img src={user.avatar_url} alt={user.name} referrerPolicy="no-referrer" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                ) : (
+                  initial
+                )}
+
+                {isUploadingHeroAvatar ? (
+                  <div className="absolute inset-0 bg-night/75 backdrop-blur-xs flex flex-col items-center justify-center gap-2 text-white">
+                    <Loader2 className="w-8 h-8 text-[#F4B08A] animate-spin" />
+                    <span className="text-xs font-semibold">Updating photo…</span>
+                  </div>
+                ) : (
+                  <div className="absolute inset-0 bg-night/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 text-white text-xs font-semibold backdrop-blur-[2px]">
+                    <Camera className="w-6 h-6 text-[#F4B08A]" />
+                    <span>{user.avatar_url ? 'Change photo' : 'Upload photo'}</span>
+                  </div>
+                )}
               </motion.div>
-              <div className="absolute -right-12 -bottom-8">
+              <div className="absolute -right-12 -bottom-8 pointer-events-none">
                 <Stamp year={joinYear} />
               </div>
+
+              {/* Direct hero upload file input */}
+              <input
+                ref={heroAvatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleDirectHeroAvatarUpload}
+                aria-label="Upload profile photo"
+              />
             </div>
 
             {/* Name, bio, meta */}
@@ -481,11 +578,16 @@ export const UserProfilePage = () => {
               <form onSubmit={handleSaveProfile} className="px-6 sm:px-8 py-7 space-y-6">
                 {/* Live preview */}
                 <div className="card p-5 flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-2xl overflow-hidden bg-accent text-white flex items-center justify-center font-display text-3xl shrink-0">
+                  <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-accent text-white flex items-center justify-center font-display text-3xl shrink-0 ring-1 ring-line">
                     {formData.avatar_url ? (
                       <img src={formData.avatar_url} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
                     ) : (
                       (formData.name || user.name).charAt(0).toUpperCase()
+                    )}
+                    {isUploadingAvatar && (
+                      <div className="absolute inset-0 bg-night/70 flex items-center justify-center">
+                        <Loader2 className="w-5 h-5 text-white animate-spin" />
+                      </div>
                     )}
                   </div>
                   <div className="min-w-0">
@@ -501,19 +603,117 @@ export const UserProfilePage = () => {
                   <input id="profile-name" type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="field" placeholder="Your name" />
                 </div>
 
+                {/* Profile photo uploader (exact SubmitPlace / EditPlace cover pattern) */}
                 <div>
-                  <label htmlFor="profile-avatar" className="field-label !flex items-center gap-2">
-                    <ImageIcon className="w-3.5 h-3.5" /> Profile photo link
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="field-label !mb-0 flex items-center gap-1.5">
+                      <Camera className="w-4 h-4 text-accent" /> Profile photo
+                    </p>
+                    {formData.avatar_url && (
+                      <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                        <Check className="w-3 h-3" /> Photo ready
+                      </span>
+                    )}
+                  </div>
+                  <p className="field-hint mb-3">Your avatar visible across SafarNamma and travel groups.</p>
+
+                  {avatarUploadError && (
+                    <div className="mb-3 p-3.5 bg-[#FDF3F1] border border-[#F2C9C2] rounded-2xl text-xs text-[#8A1C12] flex items-center justify-between gap-2" role="alert">
+                      <span>{avatarUploadError}</span>
+                      <button type="button" onClick={() => setAvatarUploadError(null)} className="p-1 hover:text-[#B42318]" aria-label="Dismiss error">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+
+                  {formData.avatar_url ? (
+                    <div className="space-y-3">
+                      <div className="relative rounded-2xl overflow-hidden border border-line bg-stone aspect-square max-w-[200px] mx-auto group shadow-md">
+                        <img
+                          src={formData.avatar_url}
+                          alt="Profile photo preview"
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-night/60 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-3">
+                          <button
+                            type="button"
+                            disabled={isUploadingAvatar}
+                            onClick={() => avatarInputRef.current?.click()}
+                            className="btn-primary !py-2.5 !px-4 !text-xs flex items-center gap-1.5 w-full justify-center"
+                            style={{ background: 'var(--color-sand)', color: 'var(--color-ink)' }}
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" /> Replace
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isUploadingAvatar}
+                            onClick={handleRemoveAvatar}
+                            className="btn-primary !py-2.5 !px-4 !text-xs !bg-[#B42318] flex items-center gap-1.5 w-full justify-center"
+                          >
+                            <X className="w-3.5 h-3.5" /> Remove
+                          </button>
+                        </div>
+                        <span className="absolute bottom-2.5 left-2.5 badge glass-dark !text-[10px] !py-0.5 !px-2">
+                          <Check className="w-3 h-3" /> Photo
+                        </span>
+                      </div>
+
+                      {/* Explicit buttons for mobile / touchscreen users */}
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          disabled={isUploadingAvatar}
+                          onClick={() => avatarInputRef.current?.click()}
+                          className="btn-ghost !py-1.5 !px-3 !text-xs flex items-center gap-1.5"
+                        >
+                          {isUploadingAvatar ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                          Replace photo
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isUploadingAvatar}
+                          onClick={handleRemoveAvatar}
+                          className="btn-ghost !py-1.5 !px-3 !text-xs !text-[#B42318] hover:!bg-[#B42318]/10 flex items-center gap-1.5"
+                        >
+                          <X className="w-3.5 h-3.5" /> Remove
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isUploadingAvatar}
+                      onClick={() => avatarInputRef.current?.click()}
+                      className="w-full border-2 border-dashed border-line-strong hover:border-ink hover:bg-paper rounded-2xl p-7 text-center transition-all flex flex-col items-center justify-center min-h-[160px] disabled:opacity-60 disabled:cursor-wait group"
+                    >
+                      {isUploadingAvatar ? (
+                        <>
+                          <Loader2 className="w-7 h-7 text-ink animate-spin mb-2" />
+                          <p className="text-sm font-semibold text-ink">Uploading your photo…</p>
+                          <p className="text-xs text-muted mt-1">Optimising it for fast loading</p>
+                        </>
+                      ) : (
+                        <>
+                          <span className="w-12 h-12 rounded-full bg-accent-soft text-accent-text flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                            <ImagePlus className="w-5 h-5" />
+                          </span>
+                          <p className="text-sm font-bold text-ink">Upload a profile photo</p>
+                          <p className="text-xs text-muted mt-1">PNG, JPG or WEBP, up to 10 MB</p>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Hidden file input */}
                   <input
-                    id="profile-avatar"
-                    type="url"
-                    value={formData.avatar_url}
-                    onChange={(e) => setFormData({ ...formData, avatar_url: e.target.value })}
-                    className="field"
-                    placeholder="https://…"
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAvatarFileChange}
+                    aria-label="Upload profile photo file"
                   />
-                  <p className="field-hint mt-2">Paste a link to an image. Leave empty to show your initial.</p>
                 </div>
 
                 <div>
@@ -531,11 +731,21 @@ export const UserProfilePage = () => {
                 </div>
 
                 <div className="sticky bottom-0 -mx-6 sm:-mx-8 px-6 sm:px-8 py-4 bg-sand/95 backdrop-blur border-t border-line flex gap-3 justify-end">
-                  <button type="button" onClick={() => setIsEditing(false)} className="btn-ghost">
+                  <button type="button" onClick={() => setIsEditing(false)} className="btn-ghost" disabled={isSaving || isUploadingAvatar}>
                     Cancel
                   </button>
-                  <button type="submit" className="btn-primary">
-                    Save changes
+                  <button type="submit" className="btn-primary" disabled={isSaving || isUploadingAvatar}>
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" /> Saving…
+                      </>
+                    ) : isUploadingAvatar ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" /> Uploading photo…
+                      </>
+                    ) : (
+                      'Save changes'
+                    )}
                   </button>
                 </div>
               </form>
