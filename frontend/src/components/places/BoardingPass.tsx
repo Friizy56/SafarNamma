@@ -18,8 +18,7 @@ export const placeCode = (name: string) => {
 };
 
 // Deterministic "barcode" so each place gets its own pattern
-const barcode = (seed: number) =>
-  Array.from({ length: 34 }, (_, i) => 1 + ((seed * 31 + i * 17 + ((i * i) % 7)) % 3));
+const barcode = (seed: number) => Array.from({ length: 40 }, (_, i) => 1 + ((seed * 31 + i * 17 + ((i * i) % 7)) % 3));
 
 interface Field {
   label: string;
@@ -36,79 +35,72 @@ interface BoardingPassProps {
 
 const FieldCell: React.FC<Field> = ({ label, value }) => (
   <div className="min-w-0">
-    <p className="font-mono text-[10px] tracking-[0.14em] uppercase text-[#64748B] mb-1">{label}</p>
-    <p className="font-mono text-sm font-medium text-white truncate" title={value}>{value}</p>
+    <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-muted mb-1">{label}</p>
+    <p className="text-sm font-semibold text-ink leading-snug break-words">{value}</p>
   </div>
 );
 
+/* A paper weekend pass: Bengaluru → the place, key facts, and a tear-off stub to find a trip. */
 export const BoardingPass: React.FC<BoardingPassProps> = ({ placeId, placeName, fields, footerFields = [], onFindConvoy }) => {
   const code = placeCode(placeName);
 
   return (
-    <div className="relative flex flex-col sm:flex-row rounded-[20px] overflow-hidden bg-[#141820] border border-[rgba(255,255,255,0.08)] card-shadow">
-      {/* ── Main ticket ── */}
-      <div className="flex-1 min-w-0 p-6">
-        <div className="flex items-center justify-between mb-5">
-          <span className="font-mono text-[10px] tracking-[0.2em] uppercase text-[#F59E0B]">Weekend Pass</span>
-          <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[#64748B]">
-            No. {String(placeId).padStart(4, '0')}
-          </span>
+    <div className="spotlight relative rounded-[26px] bg-paper border border-line card-shadow-hover overflow-hidden">
+      {/* ── Ticket ── */}
+      <div className="p-6">
+        <div className="flex items-center justify-between mb-6">
+          <span className="font-mono text-[10px] tracking-[0.22em] uppercase text-accent-text">Weekend pass</span>
+          <span className="font-mono text-[10px] tracking-[0.16em] uppercase text-muted">No. {String(placeId).padStart(4, '0')}</span>
         </div>
 
-        {/* Route */}
-        <div className="flex items-end justify-between gap-4 mb-6">
+        <div className="flex items-end justify-between gap-3 mb-7">
           <div>
-            <p className="font-mono text-[10px] tracking-[0.14em] uppercase text-[#64748B] mb-1">From</p>
-            <p className="text-display text-white leading-none" style={{ fontSize: '2.25rem' }}>BLR</p>
-            <p className="text-xs text-[#64748B] mt-1">Bengaluru</p>
+            <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-muted mb-1">From</p>
+            <p className="font-display text-[2.4rem] leading-none text-ink">BLR</p>
+            <p className="text-xs text-muted mt-1.5">Bengaluru</p>
           </div>
 
-          <div className="flex-1 flex items-center gap-2 pb-6 min-w-[3rem]">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B]" />
-            <span className="flex-1 border-t border-dashed border-[#334155]" />
-            <span className="w-1.5 h-1.5 rotate-45 bg-[#F59E0B]" />
+          <div className="flex-1 flex items-center gap-1.5 pb-7 min-w-[2.5rem]" aria-hidden>
+            <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+            <span className="flex-1 border-t-2 border-dotted border-line-strong" />
+            <svg viewBox="0 0 24 24" className="w-4 h-4 text-accent rotate-90" fill="currentColor">
+              <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5Z" />
+            </svg>
           </div>
 
           <div className="text-right min-w-0">
-            <p className="font-mono text-[10px] tracking-[0.14em] uppercase text-[#64748B] mb-1">To</p>
-            <p className="text-display text-[#F59E0B] leading-none" style={{ fontSize: '2.25rem' }}>{code}</p>
-            <p className="text-xs text-[#64748B] mt-1 truncate max-w-[10rem] ml-auto" title={placeName}>{placeName}</p>
+            <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-muted mb-1">To</p>
+            <p className="font-display text-[2.4rem] leading-none text-accent">{code}</p>
+            <p className="text-xs text-muted mt-1.5 truncate max-w-[9rem] ml-auto" title={placeName}>
+              {placeName}
+            </p>
           </div>
         </div>
 
-        {/* Fields */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-4 pt-5 border-t border-dashed border-[#334155]">
-          {fields.map((f) => <FieldCell key={f.label} {...f} />)}
+        <div className="grid grid-cols-2 gap-x-5 gap-y-4">
+          {[...fields, ...footerFields].map((f) => (
+            <FieldCell key={f.label} {...f} />
+          ))}
         </div>
-
-        {footerFields.length > 0 && (
-          <div className="grid grid-cols-2 gap-4 mt-4">
-            {footerFields.map((f) => <FieldCell key={f.label} {...f} />)}
-          </div>
-        )}
       </div>
 
-      {/* ── Tear-off stub ── */}
-      <div className="relative sm:w-52 shrink-0 p-6 flex flex-col justify-between gap-5 border-t sm:border-t-0 sm:border-l border-dashed border-[#334155] bg-[#0D9488]/[0.06]">
-        {/* Perforation notches */}
-        <span className="hidden sm:block absolute -left-3 -top-3 w-6 h-6 rounded-full bg-[#0C0E10]" />
-        <span className="hidden sm:block absolute -left-3 -bottom-3 w-6 h-6 rounded-full bg-[#0C0E10]" />
-        <span className="sm:hidden absolute -top-3 -left-3 w-6 h-6 rounded-full bg-[#0C0E10]" />
-        <span className="sm:hidden absolute -top-3 -right-3 w-6 h-6 rounded-full bg-[#0C0E10]" />
+      {/* ── Perforation ── */}
+      <div className="relative h-0" aria-hidden>
+        <span className="absolute -left-3 -top-3 w-6 h-6 rounded-full bg-sand border border-line" />
+        <span className="absolute -right-3 -top-3 w-6 h-6 rounded-full bg-sand border border-line" />
+        <span className="absolute left-5 right-5 top-0 border-t-2 border-dashed border-line-strong" />
+      </div>
 
-        <div>
-          <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-[#14B8A6] mb-2">Boarding · Basecamp</p>
-          <p className="text-sm text-[#CBD5E1] leading-snug">Don't go alone. Join a convoy to {code}.</p>
-        </div>
-
-        <button onClick={onFindConvoy} className="btn-teal w-full justify-center">
-          <Users className="w-4 h-4" />
-          Find a Convoy
+      {/* ── Stub ── */}
+      <div className="p-6 pt-7 bg-stone/40">
+        <p className="font-mono text-[10px] tracking-[0.22em] uppercase text-sage-text mb-2">Boarding · Travel groups</p>
+        <p className="text-sm text-body leading-relaxed mb-5">Don't go alone. See who's heading to {code} and ride together.</p>
+        <button onClick={onFindConvoy} className="btn-primary w-full">
+          <Users className="w-4 h-4" /> Find people going
         </button>
-
-        <div className="flex items-end gap-[2px] h-8 opacity-40" aria-hidden>
+        <div className="flex items-end justify-center gap-[2px] h-9 mt-6 opacity-50" aria-hidden>
           {barcode(placeId).map((w, i) => (
-            <span key={i} className="h-full bg-[#CBD5E1]" style={{ width: `${w}px` }} />
+            <span key={i} className="h-full bg-ink" style={{ width: `${w}px` }} />
           ))}
         </div>
       </div>

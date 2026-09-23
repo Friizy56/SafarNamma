@@ -1,53 +1,86 @@
-import React from 'react';
-import { Heart } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { ArrowUpRight } from 'lucide-react';
+import { PHOTO_CREDITS } from '../../utils/images';
+import { Reveal } from '../motion/Reveal';
+
+const DISCOVER = ['Nature', 'Monuments', 'Cafes & Restaurants', 'Games & Adventure', 'Religious Places'];
 
 export const Footer = () => {
+  const year = new Date().getFullYear();
+
   return (
-    <footer className="bg-[#070A0D] text-white pt-16 pb-8 border-t border-white/10">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
-          <div className="col-span-1 md:col-span-2">
-            <Link to="/" className="flex items-center gap-2 group mb-4">
-              <img 
-                src="/safarnamma-logo.png" 
-                alt="SafarNamma" 
-                className="h-14 w-auto object-contain group-hover:scale-105 transition-transform duration-300 brightness-110" 
-              />
+    <footer className="band-night relative overflow-hidden">
+      <div className="max-w-7xl mx-auto px-6 sm:px-10 pt-24 pb-10">
+        {/* Sign-off */}
+        <Reveal className="flex flex-col lg:flex-row lg:items-end justify-between gap-10 pb-16 border-b border-white/10">
+          <div>
+            <p className="section-label mb-5">Weekend starts here</p>
+            <h2 className="font-display text-sand text-[clamp(2.6rem,6vw,5.5rem)] leading-[0.95] tracking-[-0.03em] max-w-3xl">
+              See you on the <span className="italic text-[#F4B08A]">road.</span>
+            </h2>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link to="/explore" className="btn-primary">
+              Find a place <ArrowUpRight className="w-4 h-4" />
             </Link>
-            <p className="text-[#94A3B8] text-sm leading-relaxed max-w-sm">
-              Your next adventure is closer than you think. Discover hidden gems, scenic road trips, and like-minded travelers across Bengaluru and the Western Ghats.
+            <Link to="/groups" className="btn-ghost">
+              Join a trip
+            </Link>
+          </div>
+        </Reveal>
+
+        {/* Columns */}
+        <div className="grid grid-cols-2 md:grid-cols-12 gap-10 py-14">
+          <div className="col-span-2 md:col-span-5">
+            <Link to="/" className="inline-block mb-5" aria-label="SafarNamma home">
+              <img src="/images/logo-360.webp" alt="SafarNamma" width={360} height={240} className="h-16 w-auto object-contain" loading="lazy" />
+            </Link>
+            <p className="text-[#AEB8B4] text-sm leading-relaxed max-w-sm">
+              Hidden viewpoints, waterfalls and chai stops within a day's drive of Bengaluru, shared by travellers and checked by us before they go live.
             </p>
           </div>
-          
-          <div>
-            <h3 className="font-semibold text-lg mb-4 text-[#E2E8F0]">Discover</h3>
-            <ul className="space-y-3">
-              <li><Link to="/explore?category=waterfalls" className="text-[#94A3B8] hover:text-[#F59E0B] text-sm transition-colors">Waterfalls</Link></li>
-              <li><Link to="/explore?category=treks" className="text-[#94A3B8] hover:text-[#F59E0B] text-sm transition-colors">Treks</Link></li>
-              <li><Link to="/explore?category=lakes" className="text-[#94A3B8] hover:text-[#F59E0B] text-sm transition-colors">Lakes & Peaceful</Link></li>
-              <li><Link to="/explore?category=cafes" className="text-[#94A3B8] hover:text-[#F59E0B] text-sm transition-colors">Cafes</Link></li>
-            </ul>
-          </div>
 
-          <div>
-            <h3 className="font-semibold text-lg mb-4 text-[#E2E8F0]">Community</h3>
+          <nav className="md:col-span-3" aria-label="Discover">
+            <h3 className="text-label text-[#7E8B87] mb-5">Discover</h3>
             <ul className="space-y-3">
-              <li><Link to="/groups" className="text-[#94A3B8] hover:text-[#F59E0B] text-sm transition-colors">Join a Group</Link></li>
-              <li><Link to="/submit" className="text-[#94A3B8] hover:text-[#F59E0B] text-sm transition-colors">Submit a Place</Link></li>
-              <li><Link to="/guidelines" className="text-[#94A3B8] hover:text-[#F59E0B] text-sm transition-colors">Safety Guidelines</Link></li>
-              <li><Link to="/admin/login" className="text-[#94A3B8] hover:text-[#F59E0B] text-sm transition-colors">Admin Area</Link></li>
+              {DISCOVER.map((cat) => (
+                <li key={cat}>
+                  <Link to={`/explore?category=${encodeURIComponent(cat)}`} className="text-[#D8DEDA] hover:text-white text-sm transition-colors">
+                    {cat}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+          <nav className="md:col-span-2" aria-label="Community">
+            <h3 className="text-label text-[#7E8B87] mb-5">Community</h3>
+            <ul className="space-y-3">
+              <li><Link to="/groups" className="text-[#D8DEDA] hover:text-white text-sm transition-colors">Travel groups</Link></li>
+              <li><Link to="/submit" className="text-[#D8DEDA] hover:text-white text-sm transition-colors">Submit a place</Link></li>
+              <li><Link to="/profile" className="text-[#D8DEDA] hover:text-white text-sm transition-colors">Your profile</Link></li>
+            </ul>
+          </nav>
+
+          <div className="md:col-span-2">
+            <h3 className="text-label text-[#7E8B87] mb-5">Photography</h3>
+            <ul className="space-y-2">
+              {PHOTO_CREDITS.map((c) => (
+                <li key={c.url} className="text-xs text-[#AEB8B4] leading-relaxed">
+                  {c.place} by{' '}
+                  <a href={c.url} target="_blank" rel="noreferrer" className="text-[#D8DEDA] hover:text-white underline decoration-white/20 underline-offset-2">
+                    {c.name}
+                  </a>
+                </li>
+              ))}
+              <li className="text-xs text-[#7E8B87]">via Unsplash</li>
             </ul>
           </div>
         </div>
-        
-        <div className="pt-8 border-t border-[#0D5C63]/30 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-[#94A3B8] text-sm">
-            © {new Date().getFullYear()} SafarNamma. All rights reserved.
-          </p>
-          <p className="text-[#94A3B8] text-sm flex items-center gap-1">
-            Made with <Heart className="w-4 h-4 text-[#F59E0B]" fill="currentColor" /> for travelers
-          </p>
+
+        <div className="pt-8 border-t border-white/10 flex flex-col sm:flex-row justify-between gap-3 text-xs text-[#7E8B87]">
+          <p>© {year} SafarNamma. Made in Bengaluru for weekend wanderers.</p>
+          <p className="font-mono tracking-wider">12.9716° N · 77.5946° E</p>
         </div>
       </div>
     </footer>

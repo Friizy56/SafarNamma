@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useFavorites } from '../context/FavoritesContext';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Navigate, Link } from 'react-router-dom';
+import { AnimatePresence, motion, useMotionTemplate, useReducedMotion, useScroll, useTransform } from 'motion/react';
 import {
   Mail,
   Shield,
@@ -8,28 +8,139 @@ import {
   MapPin,
   Heart,
   Users,
-  Trash2,
   X,
   Compass,
-  PlusCircle,
+  Plus,
   CheckCircle2,
   Clock,
-  ExternalLink,
-  Award,
-  Sparkles,
-  Gauge,
-  ShieldAlert,
+  ArrowUpRight,
+  Pencil,
+  Quote,
+  ImageIcon,
 } from 'lucide-react';
-import { Navigate, Link } from 'react-router-dom';
-import { submissionsApi } from '../api/client';
-import type { Place } from '../types';
+import { useAuth } from '../context/AuthContext';
+import { useFavorites } from '../context/FavoritesContext';
+import { submissionsApi, groupsApi } from '../api/client';
+import type { Group, Place } from '../types';
+import { SplitHeading } from '../components/motion/SplitHeading';
+import { Reveal } from '../components/motion/Reveal';
+import { Counter } from '../components/motion/Counter';
+import { Chip } from '../components/ui/Chip';
+import { GroupCard } from '../components/groups/GroupCard';
+import { fallbackPhoto, optimizeImageUrl, photoProps } from '../utils/images';
+import { shortLocation } from '../utils/format';
+import { setScrollLocked } from '../hooks/useLenis';
+import { cn } from '../utils/cn';
+
+const EASE = [0.22, 1, 0.36, 1] as const;
+
+type Tab = 'saved' | 'shared' | 'trips';
+
+/* ── A slowly turning passport stamp beside the avatar ── */
+const Stamp = ({ year }: { year: string }) => {
+  const reduced = useReducedMotion();
+  const text = `SAFARNAMMA · EXPLORER · SINCE ${year} · `;
+  return (
+    <motion.svg
+      viewBox="0 0 120 120"
+      className="w-[104px] h-[104px] text-[#F4B08A]"
+      animate={reduced ? undefined : { rotate: 360 }}
+      transition={{ duration: 28, repeat: Infinity, ease: 'linear' }}
+      aria-hidden
+    >
+      <defs>
+        <path id="stamp-circle" d="M 60,60 m -46,0 a 46,46 0 1,1 92,0 a 46,46 0 1,1 -92,0" />
+      </defs>
+      <circle cx="60" cy="60" r="57" fill="var(--color-night)" stroke="currentColor" strokeOpacity="0.35" strokeWidth="1" />
+      <circle cx="60" cy="60" r="34" fill="none" stroke="currentColor" strokeOpacity="0.35" strokeWidth="1" strokeDasharray="2 3" />
+      <text fontSize="9" fill="currentColor" fontFamily="JetBrains Mono, monospace">
+        <textPath href="#stamp-circle" textLength={284} lengthAdjust="spacing">
+          {text}
+        </textPath>
+      </text>
+      <g transform="translate(60 60)">
+        <path d="M0 -15 L4 -4 L15 0 L4 4 L0 15 L-4 4 L-15 0 L-4 -4 Z" fill="currentColor" />
+      </g>
+    </motion.svg>
+  );
+};
+
+/* ── One saved or shared place, as a compact photo card ── */
+const PlaceRow = ({
+  place,
+  href,
+  badge,
+  action,
+}: {
+  place: Place;
+  href?: string;
+  badge?: React.ReactNode;
+  action?: React.ReactNode;
+}) => {
+  const fallback = fallbackPhoto(place.id);
+  const img = optimizeImageUrl(place.image_url || (place as any).image_urls?.[0], 400) || fallback;
+  const location = shortLocation(place.state) || place.category || 'Karnataka';
+  const body = (
+    <>
+      <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden bg-stone shrink-0">
+        <img
+          src={img}
+          alt=""
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={(e) => {
+            const el = e.target as HTMLImageElement;
+            if (!el.src.endsWith(fallback)) el.src = fallback;
+          }}
+          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+        />
+      </div>
+      <div className="min-w-0 flex-1 py-1">
+        <p className="text-label text-muted mb-1 truncate">{place.category}</p>
+        <h3 className="font-display text-xl text-ink leading-snug line-clamp-2">{place.name}</h3>
+        <p className="flex items-center gap-1.5 text-sm text-muted mt-1.5 truncate">
+          <MapPin className="w-3.5 h-3.5 shrink-0" /> {location}
+        </p>
+        {badge && <div className="mt-2.5">{badge}</div>}
+      </div>
+    </>
+  );
+
+  return (
+    <div className="group relative card p-3 flex gap-4 items-center hover:border-line-strong hover:card-shadow transition-all duration-300">
+      {href ? (
+        <Link to={href} className="flex gap-4 items-center flex-1 min-w-0">
+          {body}
+        </Link>
+      ) : (
+        <div className="flex gap-4 items-center flex-1 min-w-0">{body}</div>
+      )}
+      {action && <div className="shrink-0 self-start">{action}</div>}
+    </div>
+  );
+};
+
+const EmptyState = ({ title, body, cta, to }: { title: string; body: string; cta: string; to: string }) => (
+  <div className="card p-10 sm:p-14 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+    <div>
+      <h3 className="font-display text-2xl text-ink mb-2">{title}</h3>
+      <p className="text-muted max-w-md">{body}</p>
+    </div>
+    <Link to={to} className="btn-primary shrink-0">
+      {cta} <ArrowUpRight className="w-4 h-4" />
+    </Link>
+  </div>
+);
 
 export const UserProfilePage = () => {
   const { user, updateUser } = useAuth();
   const { favorites, removeFavorite } = useFavorites();
+  const reduced = useReducedMotion();
 
   const [userSubmissions, setUserSubmissions] = useState<Place[]>([]);
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState<boolean>(true);
+  const [hostedTrips, setHostedTrips] = useState<Group[]>([]);
+  const [tab, setTab] = useState<Tab>('saved');
 
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
@@ -55,22 +166,49 @@ export const UserProfilePage = () => {
     fetchSubmissions();
   }, [user?.email]);
 
+  // Trips this user is hosting
+  useEffect(() => {
+    if (!user?.email) return;
+    let cancelled = false;
+    groupsApi
+      .getGroups()
+      .then((all) => {
+        if (!cancelled) setHostedTrips(all.filter((g) => g.organizer_email?.toLowerCase() === user.email.toLowerCase()));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.email]);
+
+  useEffect(() => {
+    setScrollLocked(isEditing);
+    if (!isEditing) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setIsEditing(false);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      setScrollLocked(false);
+    };
+  }, [isEditing]);
+
+  // Hero photo: parallax drift + shrink-into-frame on scroll
+  const heroRef = useRef<HTMLElement>(null);
+  const { scrollYProgress: heroProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
+  const heroInset = useTransform(heroProgress, [0, 1], [0, 1]);
+  const heroClip = useMotionTemplate`inset(calc(${heroInset} * 5%) calc(${heroInset} * 3%) calc(${heroInset} * 5%) calc(${heroInset} * 3%) round calc(${heroInset} * 40px))`;
+  const heroImageY = useTransform(heroProgress, [0, 1], ['0%', '16%']);
+
+  const liveCount = useMemo(() => userSubmissions.filter((p) => p.is_approved || (p as any).submission_status === 'approved').length, [userSubmissions]);
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  const joinDate = user.created_at
-    ? (() => {
-        try {
-          const d = new Date(user.created_at);
-          return isNaN(d.getTime())
-            ? 'Recently'
-            : d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-        } catch {
-          return 'Recently';
-        }
-      })()
-    : 'Recently';
+  const joined = user.created_at ? new Date(user.created_at) : null;
+  const validJoin = joined && !isNaN(joined.getTime());
+  const joinDate = validJoin ? joined!.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Recently';
+  const joinYear = validJoin ? String(joined!.getFullYear()) : String(new Date().getFullYear());
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,433 +220,329 @@ export const UserProfilePage = () => {
     setIsEditing(false);
   };
 
+  const openEditor = () => {
+    setFormData({
+      name: user.name || '',
+      bio: user.bio || '',
+      avatar_url: user.avatar_url || '',
+    });
+    setIsEditing(true);
+  };
+
+  const initial = user.name?.charAt(0).toUpperCase() || 'S';
+  const stats = [
+    { n: favorites.length, l: 'Saved places' },
+    { n: userSubmissions.length, l: 'Places shared' },
+    { n: liveCount, l: 'Live on SafarNamma' },
+    { n: hostedTrips.length, l: 'Trips hosted' },
+  ];
+
+  const tabs: { key: Tab; label: string; count: number; icon: typeof Heart }[] = [
+    { key: 'saved', label: 'Saved', count: favorites.length, icon: Heart },
+    { key: 'shared', label: 'Shared', count: userSubmissions.length, icon: Compass },
+    { key: 'trips', label: 'Hosting', count: hostedTrips.length, icon: Users },
+  ];
+
   return (
-    <div className="bg-[#070A0D] text-white min-h-screen py-10">
-      <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-12 space-y-8">
-        {/* ═══════════════════════════════════════════════════════
-            TOP PROFILE HEADER CARD
-            ═══════════════════════════════════════════════════════ */}
-        <div className="bg-[#0F172A]/80 rounded-3xl p-8 border border-white/10 shadow-xl flex flex-col md:flex-row items-center md:items-start gap-8 relative overflow-hidden backdrop-blur-xl">
-          <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl -mr-28 -mt-28 pointer-events-none" />
+    <div className="bg-sand min-h-screen">
+      {/* ═══ Hero ═══ */}
+      <section ref={heroRef} className="relative bg-sand pt-36 pb-32">
+        {/* Photo backdrop: shrinks into a rounded frame as you scroll, like Explore */}
+        <motion.div className="absolute inset-0 overflow-hidden bg-night grain" style={reduced ? undefined : { clipPath: heroClip }}>
+          <motion.img
+            {...photoProps('mullayanagiri')}
+            alt=""
+            aria-hidden
+            fetchPriority="high"
+            style={reduced ? { scale: 1.05 } : { y: heroImageY, scale: 1.12 }}
+            className="absolute inset-0 w-full h-full object-cover object-[center_78%] animate-fade-in"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-night/90 via-night/60 to-night/15" />
+          <div className="absolute inset-0 bg-gradient-to-t from-night/85 via-transparent to-night/40" />
+        </motion.div>
 
-          <div className="relative shrink-0">
-            <div className="h-28 w-28 md:h-32 md:w-32 bg-gradient-to-br from-[#F59E0B] to-[#D97706] rounded-3xl flex items-center justify-center text-black text-4xl font-extrabold shadow-lg border-2 border-white/20 overflow-hidden">
-              {user.avatar_url ? (
-                <img src={user.avatar_url} alt={user.name} className="h-full w-full object-cover" />
-              ) : (
-                user.name.charAt(0).toUpperCase()
-              )}
-            </div>
-            <div className="absolute -bottom-2 -right-2 bg-black text-[#F59E0B] p-2 rounded-full border border-white/10 shadow-md">
-              <Compass className="w-4 h-4" />
-            </div>
-          </div>
-
-          <div className="flex-1 text-center md:text-left z-10">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <div className="inline-flex items-center gap-1.5 bg-[#F59E0B]/15 text-[#F59E0B] px-3 py-1 rounded-full text-xs font-bold mb-2">
-                  <Sparkles className="w-3.5 h-3.5" /> Safar Pioneer Explorer
-                </div>
-                <h1 className="text-3xl font-extrabold text-white">{user.name}</h1>
-                <p className="mt-2 text-gray-400 text-sm italic max-w-xl">
-                  {user.bio ? `"${user.bio}"` : 'No bio added yet. Tell fellow travelers about your travel style!'}
-                </p>
-              </div>
-
-              <button
-                onClick={() => {
-                  setFormData({
-                    name: user.name || '',
-                    bio: user.bio || '',
-                    avatar_url: user.avatar_url || '',
-                  });
-                  setIsEditing(true);
-                }}
-                className="px-6 py-2.5 bg-white/10 hover:bg-[#F59E0B] hover:text-black text-white rounded-full font-bold transition-all self-center md:self-start text-xs uppercase tracking-wider border border-white/10"
+        <div className="on-photo relative z-10 max-w-7xl mx-auto px-6 sm:px-10">
+          <div className="flex flex-col lg:flex-row lg:items-end gap-10 lg:gap-14">
+            {/* Avatar + stamp */}
+            <div className="relative shrink-0 self-start">
+              <motion.div
+                initial={reduced ? false : { clipPath: 'inset(100% 0% 0% 0% round 36px)' }}
+                animate={{ clipPath: 'inset(0% 0% 0% 0% round 36px)' }}
+                transition={{ duration: 1.2, ease: EASE, delay: 0.1 }}
+                className="w-40 h-40 sm:w-48 sm:h-48 rounded-[36px] overflow-hidden bg-accent text-white flex items-center justify-center font-display text-7xl ring-1 ring-white/15 shadow-[0_40px_80px_-30px_rgba(0,0,0,0.8)]"
               >
-                Edit Profile
+                {user.avatar_url ? <img src={user.avatar_url} alt={user.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" /> : initial}
+              </motion.div>
+              <div className="absolute -right-12 -bottom-8">
+                <Stamp year={joinYear} />
+              </div>
+            </div>
+
+            {/* Name, bio, meta */}
+            <div className="flex-1 min-w-0">
+              <p className="section-label mb-5 animate-fade-up">{user.role === 'admin' ? 'Admin · SafarNamma' : 'Your travel profile'}</p>
+              <SplitHeading
+                as="h1"
+                onMount
+                delay={0.15}
+                className="text-display text-sand break-words"
+                style={{ fontSize: 'clamp(2.5rem, 6vw, 5.25rem)' }}
+                parts={[{ text: user.name }]}
+              />
+              <p className="font-display italic text-xl sm:text-2xl text-[#D8DEDA] mt-5 max-w-2xl leading-snug animate-fade-up delay-400">
+                {user.bio ? (
+                  <>
+                    <Quote className="inline w-5 h-5 -mt-3 mr-1 text-[#F4B08A]" />
+                    {user.bio}
+                  </>
+                ) : (
+                  <span className="text-sand/55">Add a line about how you like to travel.</span>
+                )}
+              </p>
+
+              <div className="flex flex-wrap gap-2 mt-7 animate-fade-up delay-500">
+                <span className="badge glass-dark !py-2 !px-3.5 !text-xs !font-sans !tracking-normal">
+                  <Mail className="w-3.5 h-3.5 text-[#F4B08A]" /> {user.email}
+                </span>
+                <span className="badge glass-dark !py-2 !px-3.5 !text-xs !font-sans !tracking-normal capitalize">
+                  <Shield className="w-3.5 h-3.5 text-[#F4B08A]" /> {user.role}
+                </span>
+                <span className="badge glass-dark !py-2 !px-3.5 !text-xs !font-sans !tracking-normal">
+                  <Calendar className="w-3.5 h-3.5 text-[#F4B08A]" /> Exploring since {joinDate}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex gap-3 lg:self-start animate-fade-up delay-600">
+              <button onClick={openEditor} className="btn-primary">
+                <Pencil className="w-4 h-4" /> Edit profile
               </button>
             </div>
+          </div>
+        </div>
+      </section>
 
-            <div className="mt-6 flex flex-wrap gap-3 text-gray-300 justify-center md:justify-start text-xs">
-              <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
-                <Mail className="w-3.5 h-3.5 text-[#F59E0B]" />
-                <span>{user.email}</span>
-              </div>
-              <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
-                <Shield className="w-3.5 h-3.5 text-[#F59E0B]" />
-                <span className="capitalize font-medium">{user.role}</span>
-              </div>
-              <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
-                <Calendar className="w-3.5 h-3.5 text-[#F59E0B]" />
-                <span>Explorer Since {joinDate}</span>
-              </div>
+      {/* ═══ Stats card (overlaps the hero) ═══ */}
+      <div className="relative z-20 max-w-7xl mx-auto px-4 sm:px-10 -mt-16">
+        <Reveal className="rounded-[28px] overflow-hidden border border-line bg-[#E3DACB] card-shadow-hover grid grid-cols-2 lg:grid-cols-4 gap-px">
+          {stats.map((s) => (
+            <div key={s.l} className="bg-paper p-6 sm:p-7">
+              <p className="font-display text-4xl sm:text-5xl text-ink leading-none">
+                <Counter value={s.n} />
+              </p>
+              <p className="text-label text-muted mt-3">{s.l}</p>
             </div>
+          ))}
+        </Reveal>
+      </div>
+
+      {/* ═══ Collections ═══ */}
+      <section className="max-w-7xl mx-auto px-6 sm:px-10 pt-20 pb-28">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+          <div>
+            <Reveal>
+              <p className="section-label mb-5">Your collection</p>
+            </Reveal>
+            <SplitHeading className="text-display text-ink" style={{ fontSize: 'clamp(2rem, 4.5vw, 3.5rem)' }} parts={[{ text: 'Everywhere you' }, { text: 'mean to go.', accent: true }]} />
+          </div>
+          <div className="flex items-center gap-2 p-1.5 rounded-full bg-paper border border-line self-start md:self-auto overflow-x-auto scrollbar-none max-w-full">
+            {tabs.map((t) => {
+              const Icon = t.icon;
+              return (
+                <Chip key={t.key} group="profile-tabs" active={tab === t.key} onClick={() => setTab(t.key)}>
+                  <Icon className="w-3.5 h-3.5" /> {t.label}
+                  <span className={cn('ml-1 text-[11px] font-mono px-1.5 rounded-full', tab === t.key ? 'bg-white/15' : 'bg-stone text-muted')}>{t.count}</span>
+                </Chip>
+              );
+            })}
           </div>
         </div>
 
-        {/* ═══════════════════════════════════════════════════════
-            THE SAFAR EXPEDITION SHOWCASE & VEHICLE LOGBOOK
-            Real-life cinematic photography, digital odometer, and badges
-            ═══════════════════════════════════════════════════════ */}
-        <div className="bg-[#0F172A]/80 rounded-3xl p-6 sm:p-8 border border-white/10 shadow-2xl overflow-hidden relative backdrop-blur-xl">
-          <div className="flex flex-col lg:flex-row items-center gap-8">
-            {/* Real-Life Cinematic Vehicle Showcase Visual */}
-            <div className="w-full lg:w-3/5 h-72 sm:h-80 md:h-96 rounded-2xl overflow-hidden relative border border-white/10 shadow-2xl">
-              <img
-                src="/cinematic/hero_expedition.jpg"
-                alt="SafarNamma Trailmaster 4x4"
-                className="w-full h-full object-cover filter brightness-[0.85] contrast-[1.05]"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 pointer-events-none" />
-
-              <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold text-[#F59E0B] border border-white/10">
-                Vehicle: SafarNamma Trailmaster 4x4
-              </div>
-
-              <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end text-xs text-gray-300">
-                <div>
-                  <div className="text-[10px] uppercase tracking-wider text-gray-400">Spec Profile</div>
-                  <div className="font-bold text-white text-sm">Dual-Range 4WD • 290mm Ridge Clearance</div>
-                </div>
-                <div className="bg-[#F59E0B] text-black font-bold px-3 py-1 rounded-full text-[11px] uppercase tracking-wider">
-                  Convoy Ready
-                </div>
-              </div>
-            </div>
-
-            {/* Expedition Stats & Badges Sidebar */}
-            <div className="w-full lg:w-2/5 flex flex-col justify-between space-y-6">
-              <div>
-                <div className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-[#F59E0B] font-bold mb-1">
-                  <Award className="w-4 h-4" /> Expedition Logbook
-                </div>
-                <h2 className="text-2xl font-bold text-white mb-2">
-                  The Safar Logbook
-                </h2>
-                <p className="text-xs sm:text-sm text-gray-400 leading-relaxed">
-                  Your journey odometer, saved waypoints, and verified community expedition records.
-                </p>
-              </div>
-
-              {/* Stats Counters */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white/5 border border-white/10 p-4 rounded-2xl">
-                  <div className="flex items-center gap-1.5 text-[#F59E0B] mb-1">
-                    <Gauge className="w-4 h-4" />
-                    <span className="text-[10px] uppercase tracking-wider text-gray-400">Odometer</span>
-                  </div>
-                  <div className="text-2xl font-bold font-mono text-white">842 KM</div>
-                  <div className="text-[11px] text-gray-400 mt-0.5">Recorded on Trail</div>
-                </div>
-
-                <div className="bg-white/5 border border-white/10 p-4 rounded-2xl">
-                  <div className="flex items-center gap-1.5 text-emerald-400 mb-1">
-                    <Compass className="w-4 h-4" />
-                    <span className="text-[10px] uppercase tracking-wider text-gray-400">Saved</span>
-                  </div>
-                  <div className="text-2xl font-bold font-mono text-white">
-                    {favorites.length} Spots
-                  </div>
-                  <div className="text-[11px] text-gray-400 mt-0.5">In Expedition Journal</div>
-                </div>
-              </div>
-
-              {/* Earned Adventure Badges */}
-              <div>
-                <div className="text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2.5">
-                  Earned Trail Badges
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <span className="inline-flex items-center gap-1.5 bg-[#F59E0B]/15 border border-[#F59E0B]/30 text-amber-300 text-xs px-3 py-1.5 rounded-xl font-medium">
-                    🌄 Ghats Ridge Explorer
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 bg-teal-500/15 border border-teal-500/30 text-teal-200 text-xs px-3 py-1.5 rounded-xl font-medium">
-                    ☕ Malleshwaram Heritage Scout
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 bg-purple-500/15 border border-purple-500/30 text-purple-200 text-xs px-3 py-1.5 rounded-xl font-medium">
-                    ⛺ Bortle-3 Wilderness Pioneer
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════
-            SAVED PLACES, CONTRIBUTIONS & TRAVEL GROUPS
-            ═══════════════════════════════════════════════════════ */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* 1. Saved Places (Bucket List) */}
-          <div className="bg-[#0F172A]/80 p-6 rounded-3xl border border-white/10 shadow-lg flex flex-col backdrop-blur-xl">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-rose-500/20 text-rose-400 rounded-2xl flex items-center justify-center shrink-0">
-                  <Heart className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">Saved Waypoints</h3>
-                  <p className="text-xs text-gray-400">{favorites.length} places saved</p>
-                </div>
-              </div>
-              <Link to="/explore" className="text-xs text-[#F59E0B] font-semibold hover:underline">
-                Explore
-              </Link>
-            </div>
-
-            {favorites.length === 0 ? (
-              <div className="my-auto py-8 text-center">
-                <p className="text-gray-400 text-xs mb-3">No saved waypoints yet.</p>
-                <Link
-                  to="/explore"
-                  className="text-xs font-bold text-black bg-[#F59E0B] px-4 py-2 rounded-full hover:brightness-110 transition-colors inline-block uppercase tracking-wider"
-                >
-                  Browse trails &rarr;
-                </Link>
-              </div>
-            ) : (
-              <div className="flex-1 overflow-y-auto pr-1 space-y-3 max-h-72">
-                {favorites.map((place) => {
-                  const placeImg =
-                    place.image_url ||
-                    (place as any).image_urls?.[0] ||
-                    'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800';
-                  return (
-                    <div
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={tab}
+            initial={reduced ? false : { opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduced ? undefined : { opacity: 0, y: -12 }}
+            transition={{ duration: 0.45, ease: EASE }}
+          >
+            {tab === 'saved' &&
+              (favorites.length === 0 ? (
+                <EmptyState title="Nothing saved yet" body="Tap Save on any place to build your weekend list. It lives here." cta="Browse places" to="/explore" />
+              ) : (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {favorites.map((place) => (
+                    <PlaceRow
                       key={place.id}
-                      className="flex gap-3 items-center bg-white/5 p-2.5 rounded-2xl border border-white/10 group hover:border-[#F59E0B]/40 transition-colors"
-                    >
-                      <img
-                        src={placeImg}
-                        alt={place.name}
-                        className="w-12 h-12 rounded-xl object-cover shrink-0"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <Link
-                          to={`/places/${place.id}`}
-                          className="font-semibold text-xs text-white hover:text-[#F59E0B] truncate block"
+                      place={place}
+                      href={`/places/${place.id}`}
+                      action={
+                        <button
+                          onClick={() => removeFavorite(place.id)}
+                          className="w-10 h-10 rounded-full flex items-center justify-center text-accent hover:bg-accent-soft transition-colors"
+                          title="Remove from saved"
+                          aria-label={`Remove ${place.name} from saved`}
                         >
-                          {place.name}
-                        </Link>
-                        <p className="text-[11px] text-gray-400 truncate flex items-center gap-1 mt-0.5">
-                          <MapPin className="w-3 h-3 text-[#F59E0B] shrink-0" />
-                          {place.state || place.category || 'Karnataka'}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => removeFavorite(place.id)}
-                        className="p-2 text-gray-400 hover:text-red-400 hover:bg-white/10 rounded-lg transition-colors shrink-0"
-                        title="Remove from favorites"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* 2. My Submissions (Community Contributions) */}
-          <div className="bg-[#0F172A]/80 p-6 rounded-3xl border border-white/10 shadow-lg flex flex-col backdrop-blur-xl">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-amber-500/20 text-[#F59E0B] rounded-2xl flex items-center justify-center shrink-0">
-                  <Compass className="w-5 h-5" />
+                          <Heart className="w-4 h-4 fill-current" />
+                        </button>
+                      }
+                    />
+                  ))}
                 </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">My Submissions</h3>
-                  <p className="text-xs text-gray-400">{userSubmissions.length} spots contributed</p>
-                </div>
-              </div>
-              <Link
-                to="/submit"
-                className="text-xs text-[#F59E0B] font-semibold hover:underline flex items-center gap-1"
-              >
-                <PlusCircle className="w-3.5 h-3.5" /> Submit
-              </Link>
-            </div>
+              ))}
 
-            {isLoadingSubmissions ? (
-              <p className="text-xs text-gray-400 text-center my-auto py-8">Loading submissions...</p>
-            ) : userSubmissions.length === 0 ? (
-              <div className="my-auto py-8 text-center">
-                <p className="text-gray-400 text-xs mb-3">You haven't submitted any places yet.</p>
-                <Link
-                  to="/submit"
-                  className="text-xs font-bold text-black bg-[#F59E0B] px-4 py-2 rounded-full hover:brightness-110 transition-colors inline-block uppercase tracking-wider"
-                >
-                  Submit a hidden gem &rarr;
-                </Link>
-              </div>
-            ) : (
-              <div className="flex-1 overflow-y-auto pr-1 space-y-3 max-h-72">
-                {userSubmissions.map((place) => {
-                  const placeImg =
-                    place.image_url || 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800';
-                  const isApproved =
-                    place.is_approved || (place as any).submission_status === 'approved';
-                  return (
-                    <div
-                      key={place.id}
-                      className="flex gap-3 items-center bg-white/5 p-2.5 rounded-2xl border border-white/10"
-                    >
-                      <img
-                        src={placeImg}
-                        alt={place.name}
-                        className="w-12 h-12 rounded-xl object-cover shrink-0"
-                      />
-                      <div className="flex-1 min-w-0">
-                        {isApproved ? (
-                          <Link
-                            to={`/places/${place.id}`}
-                            className="font-semibold text-xs text-white hover:text-[#F59E0B] truncate block"
-                          >
-                            {place.name}
-                          </Link>
-                        ) : (
-                          <p className="font-semibold text-xs text-white truncate">{place.name}</p>
-                        )}
-                        <div className="mt-1 flex items-center gap-1.5">
-                          {isApproved ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/30">
+            {tab === 'shared' &&
+              (isLoadingSubmissions ? (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="skeleton h-[136px] rounded-[22px]" />
+                  ))}
+                </div>
+              ) : userSubmissions.length === 0 ? (
+                <EmptyState title="You haven't shared a place yet" body="Know a waterfall, temple or café worth the drive? Four quick questions and it's with our team." cta="Share a hidden gem" to="/submit" />
+              ) : (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {userSubmissions.map((place) => {
+                    const isApproved = place.is_approved || (place as any).submission_status === 'approved';
+                    return (
+                      <PlaceRow
+                        key={place.id}
+                        place={place}
+                        href={isApproved ? `/places/${place.id}` : undefined}
+                        badge={
+                          isApproved ? (
+                            <span className="badge badge-success">
                               <CheckCircle2 className="w-3 h-3" /> Live
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30">
-                              <Clock className="w-3 h-3" /> Review
+                            <span className="badge badge-amber">
+                              <Clock className="w-3 h-3" /> In review
                             </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {isApproved && (
-                        <Link
-                          to={`/places/${place.id}`}
-                          className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                          title="View live page"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                        </Link>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* 3. My Travel Groups */}
-          <div className="bg-[#0F172A]/80 p-6 rounded-3xl border border-white/10 shadow-lg flex flex-col backdrop-blur-xl">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-teal-500/20 text-teal-300 rounded-2xl flex items-center justify-center shrink-0">
-                  <Users className="w-5 h-5" />
+                          )
+                        }
+                        action={
+                          isApproved ? (
+                            <Link to={`/places/${place.id}`} className="w-10 h-10 rounded-full flex items-center justify-center text-muted hover:text-ink hover:bg-stone transition-colors" aria-label={`View ${place.name}`}>
+                              <ArrowUpRight className="w-4 h-4" />
+                            </Link>
+                          ) : undefined
+                        }
+                      />
+                    );
+                  })}
+                  <Link to="/submit" className="card border-dashed !border-line-strong p-3 flex items-center justify-center gap-3 text-muted hover:text-ink hover:!border-ink transition-colors min-h-[136px]">
+                    <Plus className="w-5 h-5" /> <span className="font-semibold">Share another place</span>
+                  </Link>
                 </div>
+              ))}
+
+            {tab === 'trips' &&
+              (hostedTrips.length === 0 ? (
+                <EmptyState title="You're not hosting any trips" body="Pick a place, set a date and gather your crew. You approve who joins." cta="Start a trip" to="/groups" />
+              ) : (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {hostedTrips.map((g) => (
+                    <GroupCard key={g.id} group={g} variant="ticket" />
+                  ))}
+                </div>
+              ))}
+          </motion.div>
+        </AnimatePresence>
+      </section>
+
+      {/* ═══ Edit profile side sheet ═══ */}
+      <AnimatePresence>
+        {isEditing && (
+          <motion.div className="fixed inset-0 z-[60] flex justify-end" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <button className="absolute inset-0 bg-night/55 backdrop-blur-sm" onClick={() => setIsEditing(false)} aria-label="Close" />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="edit-profile-title"
+              initial={reduced ? false : { x: '100%' }}
+              animate={{ x: 0 }}
+              exit={reduced ? undefined : { x: '100%' }}
+              transition={{ duration: 0.55, ease: EASE }}
+              className="relative w-full max-w-md h-full bg-sand overflow-y-auto shadow-2xl"
+              data-lenis-prevent
+            >
+              <div className="sticky top-0 z-10 bg-sand/90 backdrop-blur border-b border-line px-6 sm:px-8 py-5 flex items-center justify-between">
                 <div>
-                  <h3 className="text-base font-bold text-white">My Convoys</h3>
-                  <p className="text-xs text-gray-400">Active group rides</p>
+                  <p className="section-label">Profile</p>
+                  <h2 id="edit-profile-title" className="font-display text-2xl text-ink mt-1">
+                    Edit your details
+                  </h2>
                 </div>
-              </div>
-              <Link to="/groups" className="text-xs text-[#F59E0B] font-semibold hover:underline">
-                Find Groups
-              </Link>
-            </div>
-
-            <div className="my-auto py-8 text-center">
-              <p className="text-gray-400 text-xs mb-3">Connect and travel with fellow explorers.</p>
-              <Link
-                to="/groups"
-                className="text-xs font-bold text-black bg-[#F59E0B] px-4 py-2 rounded-full hover:brightness-110 transition-colors inline-block uppercase tracking-wider"
-              >
-                Browse active trips &rarr;
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════
-          EDIT PROFILE MODAL POPUP
-          ═══════════════════════════════════════════════════════ */}
-      {isEditing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
-          <div className="bg-[#0F172A] rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-white/20 relative text-white">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-white">Edit Profile</h2>
-                <p className="text-xs text-gray-400 mt-1">Update your public traveler details</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsEditing(false)}
-                className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveProfile} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1.5">
-                  Full Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border border-white/20 bg-white/5 focus:border-[#F59E0B] outline-none text-sm transition-all text-white"
-                  placeholder="Your Name"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1.5">
-                  Profile Picture URL
-                </label>
-                <input
-                  type="url"
-                  value={formData.avatar_url}
-                  onChange={(e) => setFormData({ ...formData, avatar_url: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border border-white/20 bg-white/5 focus:border-[#F59E0B] outline-none text-sm transition-all text-white"
-                  placeholder="https://images.unsplash.com/..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1.5">
-                  Travel Bio & Motto
-                </label>
-                <textarea
-                  rows={3}
-                  value={formData.bio}
-                  onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border border-white/20 bg-white/5 focus:border-[#F59E0B] outline-none text-sm transition-all text-white"
-                  placeholder="Weekend trekker, photographer, exploring hidden trails around Bengaluru..."
-                />
-              </div>
-
-              <div className="flex gap-3 pt-4 border-t border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  className="flex-1 px-4 py-2.5 border border-white/20 text-gray-300 rounded-xl font-semibold hover:bg-white/10 transition-colors text-xs uppercase tracking-wider"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-[#F59E0B] to-[#D97706] text-black rounded-xl font-bold hover:brightness-110 transition-colors text-xs uppercase tracking-wider shadow-md"
-                >
-                  Save Changes
+                <button onClick={() => setIsEditing(false)} className="w-10 h-10 rounded-full hover:bg-stone text-ink flex items-center justify-center transition-colors" aria-label="Close">
+                  <X className="w-5 h-5" />
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+
+              <form onSubmit={handleSaveProfile} className="px-6 sm:px-8 py-7 space-y-6">
+                {/* Live preview */}
+                <div className="card p-5 flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-2xl overflow-hidden bg-accent text-white flex items-center justify-center font-display text-3xl shrink-0">
+                    {formData.avatar_url ? (
+                      <img src={formData.avatar_url} alt="" referrerPolicy="no-referrer" className="w-full h-full object-cover" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
+                    ) : (
+                      (formData.name || user.name).charAt(0).toUpperCase()
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-display text-xl text-ink truncate">{formData.name || user.name}</p>
+                    <p className="text-sm text-muted italic line-clamp-2">{formData.bio || 'Your bio will appear here.'}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="profile-name" className="field-label">
+                    Full name *
+                  </label>
+                  <input id="profile-name" type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="field" placeholder="Your name" />
+                </div>
+
+                <div>
+                  <label htmlFor="profile-avatar" className="field-label !flex items-center gap-2">
+                    <ImageIcon className="w-3.5 h-3.5" /> Profile photo link
+                  </label>
+                  <input
+                    id="profile-avatar"
+                    type="url"
+                    value={formData.avatar_url}
+                    onChange={(e) => setFormData({ ...formData, avatar_url: e.target.value })}
+                    className="field"
+                    placeholder="https://…"
+                  />
+                  <p className="field-hint mt-2">Paste a link to an image. Leave empty to show your initial.</p>
+                </div>
+
+                <div>
+                  <label htmlFor="profile-bio" className="field-label">
+                    Travel bio
+                  </label>
+                  <textarea
+                    id="profile-bio"
+                    rows={4}
+                    value={formData.bio}
+                    onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                    className="field resize-none"
+                    placeholder="Weekend trekker, chai hunter, always chasing sunrises around Bengaluru…"
+                  />
+                </div>
+
+                <div className="sticky bottom-0 -mx-6 sm:-mx-8 px-6 sm:px-8 py-4 bg-sand/95 backdrop-blur border-t border-line flex gap-3 justify-end">
+                  <button type="button" onClick={() => setIsEditing(false)} className="btn-ghost">
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-primary">
+                    Save changes
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

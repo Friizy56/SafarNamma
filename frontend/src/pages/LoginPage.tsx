@@ -50,7 +50,7 @@ export const LoginPage = () => {
             alt="SafarNamma"
             className="h-20 mx-auto mb-4 drop-shadow-sm"
           />
-          <div className="inline-flex items-center gap-1.5 bg-amber-50 text-[#F59E0B] px-3 py-1 rounded-full text-xs font-bold mb-3">
+          <div className="inline-flex items-center gap-1.5 bg-amber-50 text-[#F2A541] px-3 py-1 rounded-full text-xs font-bold mb-3">
             <Compass className="w-3.5 h-3.5" /> Explorer Portal
           </div>
           <h2 className="text-3xl font-serif font-bold text-[#071E22]">Student Sign In</h2>

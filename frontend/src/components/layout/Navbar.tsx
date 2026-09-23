@@ -1,56 +1,92 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  
-  Compass, 
-  Users, 
-  LogIn, 
-  Menu, 
-  LogOut, 
-  User as UserIcon, 
-  Shield, 
-  Bell, 
-  CheckCircle2, 
-  XCircle, 
-  Clock, 
-  UserPlus, 
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import {
+  LogIn,
+  LogOut,
+  User as UserIcon,
+  Shield,
+  Bell,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  UserPlus,
   CheckCheck,
   Trash2,
   ChevronRight,
-  X
+  X,
+  Plus,
+  ArrowUpRight,
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { useAuth } from '../../context/AuthContext';
 import { notificationsApi } from '../../api/client';
 import type { AppNotification } from '../../types';
+import { hasPhotoHero } from '../../utils/routes';
+import { setScrollLocked } from '../../hooks/useLenis';
+import { NavRoad, LOGO_HEIGHT } from './NavRoad';
+
+const EASE = [0.22, 1, 0.36, 1] as const;
 
 export const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const reduced = useReducedMotion();
   const { user, isAuthenticated, logout, isAdmin } = useAuth();
-  
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [mobileNotifsOpen, setMobileNotifsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  
+
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
-  
-  const notificationsRef = useRef<HTMLDivElement>(null);
 
-  // Scroll listener for transparent → glass transition
+  const notificationsRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
+  const desktopRightRef = useRef<HTMLDivElement>(null);
+  const mobileRightRef = useRef<HTMLDivElement>(null);
+  const [rightWidth, setRightWidth] = useState(0);
+
+  // The navbar road ends just before the right-hand controls
   useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 80);
+    const els = [desktopRightRef.current, mobileRightRef.current].filter(Boolean) as HTMLElement[];
+    const measure = () => setRightWidth(Math.max(0, ...els.map((el) => el.offsetWidth)));
+    const ro = new ResizeObserver(measure);
+    els.forEach((el) => ro.observe(el));
+    measure();
+    return () => ro.disconnect();
+  }, []);
+
+  // Scroll listener: the pill turns to sandstone glass once the page moves
+  useEffect(() => {
+    const handleScroll = () => setIsScrolled(window.scrollY > 60);
     window.addEventListener('scroll', handleScroll, { passive: true });
     handleScroll();
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [location.pathname]);
+
+  // Close menus on navigation
+  useEffect(() => {
+    setIsMenuOpen(false);
+    setIsProfileOpen(false);
+    setIsNotificationsOpen(false);
+    setMobileNotifsOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    setScrollLocked(isMenuOpen);
+    return () => setScrollLocked(false);
+  }, [isMenuOpen]);
+
+  // Over a dark photo hero (and not yet scrolled) the bar uses light text
+  const onPhoto = hasPhotoHero(location.pathname) && !isScrolled && !isMenuOpen;
 
   const navLinks = [
-    { name: 'Explore', path: '/explore', icon: Compass },
-    { name: 'Groups', path: '/groups', icon: Users },
+    { name: 'Explore', path: '/explore' },
+    { name: 'Groups', path: '/groups' },
+    { name: 'Submit a place', path: '/submit' },
   ];
 
   // Fetch notifications from backend
@@ -74,11 +110,14 @@ export const Navbar = () => {
     return () => clearInterval(interval);
   }, [fetchNotifications, isAuthenticated]);
 
-  // Close dropdown on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
         setIsNotificationsOpen(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -104,70 +143,31 @@ export const Navbar = () => {
     }
   };
 
-  // Get icon and color palette for notification types
+  // Icon and colours per notification type
   const getNotificationMeta = (type: string) => {
     switch (type) {
       case 'place_approved':
       case 'group_approved':
-        return {
-          icon: CheckCircle2,
-          iconColor: 'text-emerald-600',
-          bgColor: 'bg-emerald-50',
-          badgeClass: 'bg-emerald-100 text-emerald-800',
-          badgeText: 'Approved'
-        };
+        return { icon: CheckCircle2, iconColor: 'text-[#2F7D5B]', bgColor: 'bg-[#DDEEE4]', badgeClass: 'bg-[#DDEEE4] text-[#2F7D5B]', badgeText: 'Approved' };
       case 'place_rejected':
       case 'group_rejected':
-        return {
-          icon: XCircle,
-          iconColor: 'text-rose-600',
-          bgColor: 'bg-rose-50',
-          badgeClass: 'bg-rose-100 text-rose-800',
-          badgeText: 'Declined'
-        };
+        return { icon: XCircle, iconColor: 'text-[#B42318]', bgColor: 'bg-[#F8DEDA]', badgeClass: 'bg-[#F8DEDA] text-[#B42318]', badgeText: 'Declined' };
       case 'place_pending':
       case 'group_pending':
-        return {
-          icon: Clock,
-          iconColor: 'text-amber-600',
-          bgColor: 'bg-amber-50',
-          badgeClass: 'bg-amber-100 text-amber-800',
-          badgeText: 'Pending'
-        };
+        return { icon: Clock, iconColor: 'text-accent-text', bgColor: 'bg-accent-soft', badgeClass: 'bg-accent-soft text-accent-text', badgeText: 'Pending' };
       case 'group_request_received':
-        return {
-          icon: UserPlus,
-          iconColor: 'text-blue-600',
-          bgColor: 'bg-blue-50',
-          badgeClass: 'bg-blue-100 text-blue-800',
-          badgeText: 'Join Request'
-        };
+        return { icon: UserPlus, iconColor: 'text-sage-text', bgColor: 'bg-sage-soft', badgeClass: 'bg-sage-soft text-sage-text', badgeText: 'Join request' };
       case 'admin_submission_alert':
-        return {
-          icon: Shield,
-          iconColor: 'text-purple-600',
-          bgColor: 'bg-purple-50',
-          badgeClass: 'bg-purple-100 text-purple-800',
-          badgeText: 'Admin Moderation'
-        };
+        return { icon: Shield, iconColor: 'text-ink', bgColor: 'bg-stone', badgeClass: 'bg-stone text-ink', badgeText: 'Moderation' };
       default:
-        return {
-          icon: Bell,
-          iconColor: 'text-gray-600',
-          bgColor: 'bg-gray-50',
-          badgeClass: 'bg-gray-100 text-gray-800',
-          badgeText: 'Update'
-        };
+        return { icon: Bell, iconColor: 'text-muted', bgColor: 'bg-stone', badgeClass: 'bg-stone text-muted', badgeText: 'Update' };
     }
   };
 
   // Handle clicking an individual notification
   const handleNotificationClick = async (notif: AppNotification) => {
     if (!notif.is_read) {
-      // Optimistic local state update
-      setNotifications(prev =>
-        prev.map(n => n.id === notif.id ? { ...n, is_read: true } : n)
-      );
+      setNotifications(prev => prev.map(n => (n.id === notif.id ? { ...n, is_read: true } : n)));
       setUnreadCount(prev => Math.max(0, prev - 1));
       await notificationsApi.markAsRead(notif.id);
     }
@@ -178,7 +178,6 @@ export const Navbar = () => {
     }
   };
 
-  // Handle mark all notifications as read
   const handleMarkAllRead = async () => {
     if (!user?.email) return;
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
@@ -186,7 +185,6 @@ export const Navbar = () => {
     await notificationsApi.markAllAsRead(user.email, isAdmin);
   };
 
-  // Handle clearing all notifications from database
   const handleClearAll = async () => {
     if (!user?.email) return;
     setNotifications([]);
@@ -194,7 +192,6 @@ export const Navbar = () => {
     await notificationsApi.clearAll(user.email, isAdmin);
   };
 
-  // Handle deleting a single notification from database
   const handleDeleteNotification = async (e: React.MouseEvent, notifId: number) => {
     e.stopPropagation();
     const target = notifications.find(n => n.id === notifId);
@@ -205,440 +202,362 @@ export const Navbar = () => {
     await notificationsApi.deleteNotification(notifId);
   };
 
+  const notificationList = (compact: boolean) =>
+    notifications.length === 0 ? (
+      <div className="py-10 px-4 text-center">
+        <div className="w-12 h-12 rounded-full bg-stone text-muted flex items-center justify-center mx-auto mb-3">
+          <Bell className="w-5 h-5" />
+        </div>
+        <p className="text-sm font-semibold text-ink">You're all caught up</p>
+        <p className="text-xs text-muted mt-1">Updates on your places and trip requests show up here.</p>
+      </div>
+    ) : (
+      notifications.map((notif) => {
+        const meta = getNotificationMeta(notif.type);
+        const IconComponent = meta.icon;
+        return (
+          <div
+            key={notif.id}
+            onClick={() => {
+              handleNotificationClick(notif);
+              if (compact) setMobileNotifsOpen(false);
+            }}
+            className={cn(
+              'px-4 py-3.5 transition-colors cursor-pointer flex gap-3 items-start relative group',
+              notif.is_read ? 'hover:bg-sand' : 'bg-accent-soft/40 hover:bg-accent-soft/70'
+            )}
+          >
+            <div className={cn('p-2 rounded-xl shrink-0 mt-0.5', meta.bgColor)}>
+              <IconComponent className={cn('w-4 h-4', meta.iconColor)} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2 mb-0.5">
+                <p className={cn('text-[13px] font-semibold truncate', notif.is_read ? 'text-body' : 'text-ink')}>{notif.title}</p>
+                <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-semibold shrink-0', meta.badgeClass)}>{meta.badgeText}</span>
+              </div>
+              <p className="text-xs text-muted leading-snug line-clamp-2">{notif.message}</p>
+              <div className="flex items-center justify-between mt-1.5">
+                <span className="text-[11px] text-muted">{formatTimeAgo(notif.created_at)}</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => handleDeleteNotification(e, notif.id)}
+                    title="Dismiss notification"
+                    aria-label="Dismiss notification"
+                    className={cn('p-1 text-muted hover:text-[#B42318] transition-all rounded', !compact && 'opacity-0 group-hover:opacity-100')}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                  {!compact && (
+                    <span className="text-[11px] text-accent-text font-semibold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+                      View <ChevronRight className="w-3 h-3" />
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            {!notif.is_read && <span className="w-2 h-2 rounded-full bg-accent shrink-0 self-center" />}
+          </div>
+        );
+      })
+    );
+
+  const notificationActions = (
+    <div className="flex items-center gap-3">
+      {unreadCount > 0 && (
+        <button onClick={handleMarkAllRead} className="flex items-center gap-1 text-xs text-muted hover:text-ink transition-colors font-semibold">
+          <CheckCheck className="w-3.5 h-3.5" /> Mark all read
+        </button>
+      )}
+      {notifications.length > 0 && (
+        <button onClick={handleClearAll} className="flex items-center gap-1 text-xs text-muted hover:text-[#B42318] transition-colors font-semibold">
+          <Trash2 className="w-3.5 h-3.5" /> Clear all
+        </button>
+      )}
+    </div>
+  );
+
+  const dropdownMotion = reduced
+    ? {}
+    : { initial: { opacity: 0, y: -8, scale: 0.98 }, animate: { opacity: 1, y: 0, scale: 1 }, exit: { opacity: 0, y: -6, scale: 0.98 }, transition: { duration: 0.22, ease: EASE } };
+
+  const iconButton = cn(
+    'relative w-10 h-10 rounded-full flex items-center justify-center transition-colors',
+    onPhoto ? 'text-sand hover:bg-white/15' : 'text-ink hover:bg-ink/[0.06]'
+  );
+
   return (
-    <nav
-      className={`sticky top-0 z-50 w-full transition-all duration-300 ${
-        isScrolled ? 'navbar-glass' : 'navbar-transparent'
-      }`}
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-20">
-          
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 group">
-            <img 
-              src="/safarnamma-logo.png" 
-              alt="SafarNamma" 
-              className="h-14 w-auto object-contain group-hover:scale-105 transition-transform duration-300 drop-shadow-md" 
+    <nav className="fixed inset-x-0 top-0 z-50 px-3 sm:px-5" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
+      <div
+        className={cn(
+          'nav-pill relative mx-auto rounded-full transition-[max-width,background-color,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
+          isScrolled || !hasPhotoHero(location.pathname) || isMenuOpen ? 'nav-pill-scrolled max-w-5xl' : 'max-w-6xl'
+        )}
+      >
+        {/* The road out of the N of Namma, with a jeep that tracks page progress */}
+        <NavRoad logoLeft={16} barHeight={68} endInset={rightWidth + 22} />
+
+        <div className="relative z-10 flex justify-between items-center h-[68px] pl-4 pr-2.5">
+          <Link to="/" className="group shrink-0" aria-label="SafarNamma home">
+            <img
+              src="/images/logo-360.webp"
+              alt="SafarNamma"
+              width={360}
+              height={240}
+              style={{ height: LOGO_HEIGHT }}
+              className="w-auto object-contain drop-shadow-[0_2px_6px_rgba(14,31,34,0.25)] transition-transform duration-500 group-hover:-rotate-2 group-hover:scale-[1.04]"
             />
           </Link>
 
-          {/* Desktop Nav */}
-          <div className="hidden md:flex items-center gap-8">
-            <div className="flex items-center gap-8">
-              {navLinks.map((link) => {
-                const isActive = location.pathname.startsWith(link.path);
-                const Icon = link.icon;
-                return (
-                  <Link
-                    key={link.name}
-                    to={link.path}
-                    className={cn(
-                      "flex items-center gap-2 text-xs uppercase tracking-widest font-bold transition-colors hover:text-[#F59E0B]",
-                      isActive ? "text-[#F59E0B]" : "text-gray-300"
-                    )}
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                    {link.name}
-                  </Link>
-                );
-              })}
-            </div>
-
-            <div className="flex items-center gap-5 border-l border-white/10 pl-6">
-              <Link 
-                to="/submit" 
-                className="text-xs uppercase tracking-widest font-bold text-gray-300 hover:text-[#F59E0B] transition-colors"
-              >
-                Submit a Place
-              </Link>
-              
-              {isAuthenticated ? (
-                <div className="flex items-center gap-3">
-                  
-                  {/* Notification Bell Dropdown */}
-                  <div className="relative" ref={notificationsRef}>
-                    <button 
-                      onClick={() => {
-                        setIsNotificationsOpen(prev => !prev);
-                        setIsProfileOpen(false);
-                      }}
-                      aria-label="Notifications"
-                      className={cn(
-                        "relative p-2 rounded-full transition-all focus:outline-none",
-                        isNotificationsOpen 
-                          ? "bg-[#0D5C63]/10 text-[#0D5C63]" 
-                          : "text-gray-600 hover:text-[#0D5C63] hover:bg-gray-100"
-                      )}
-                    >
-                      <Bell className="w-5 h-5" />
-                      {unreadCount > 0 && (
-                        <span className="absolute -top-0.5 -right-0.5 flex h-5 min-w-[20px] px-1 items-center justify-center rounded-full bg-rose-500 text-[11px] font-bold text-white shadow-sm ring-2 ring-white animate-pulse">
-                          {unreadCount > 9 ? '9+' : unreadCount}
-                        </span>
-                      )}
-                    </button>
-
-                    {/* Popover Dropdown */}
-                    {isNotificationsOpen && (
-                      <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                        {/* Header */}
-                        <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-gray-900 text-sm">Notifications</span>
-                            {unreadCount > 0 && (
-                              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#0D5C63]/10 text-[#0D5C63]">
-                                {unreadCount} new
-                              </span>
-                            )}
-                          </div>
-                          {unreadCount > 0 && (
-                            <button
-                              onClick={handleMarkAllRead}
-                              className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#0D5C63] transition-colors font-medium"
-                            >
-                              <CheckCheck className="w-3.5 h-3.5" />
-                              Mark all read
-                            </button>
-                          )}
-                          {notifications.length > 0 && (
-                            <button
-                              onClick={handleClearAll}
-                              className="flex items-center gap-1 text-xs text-gray-500 hover:text-rose-600 transition-colors font-medium"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              Clear all
-                            </button>
-                          )}
-                        </div>
-
-                        {/* List */}
-                        <div className="max-h-[380px] overflow-y-auto divide-y divide-gray-50">
-                          {notifications.length === 0 ? (
-                            <div className="py-10 px-4 text-center">
-                              <div className="w-12 h-12 rounded-full bg-gray-50 text-gray-400 flex items-center justify-center mx-auto mb-3">
-                                <Bell className="w-6 h-6 stroke-1" />
-                              </div>
-                              <p className="text-sm font-medium text-gray-700">All caught up!</p>
-                              <p className="text-xs text-gray-400 mt-1">No updates on places or trip requests yet.</p>
-                            </div>
-                          ) : (
-                            notifications.map((notif) => {
-                              const meta = getNotificationMeta(notif.type);
-                              const IconComponent = meta.icon;
-                              return (
-                                <div
-                                  key={notif.id}
-                                  onClick={() => handleNotificationClick(notif)}
-                                  className={cn(
-                                    "p-3.5 transition-colors cursor-pointer flex gap-3 items-start relative group",
-                                    notif.is_read 
-                                      ? "bg-white hover:bg-gray-50/80" 
-                                      : "bg-emerald-50/30 hover:bg-emerald-50/60"
-                                  )}
-                                >
-                                  {/* Icon */}
-                                  <div className={cn("p-2 rounded-xl shrink-0 mt-0.5", meta.bgColor)}>
-                                    <IconComponent className={cn("w-4 h-4", meta.iconColor)} />
-                                  </div>
-
-                                  {/* Content */}
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center justify-between gap-1 mb-0.5">
-                                      <p className={cn("text-xs font-semibold truncate", notif.is_read ? "text-gray-800" : "text-gray-900")}>
-                                        {notif.title}
-                                      </p>
-                                      <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0", meta.badgeClass)}>
-                                        {meta.badgeText}
-                                      </span>
-                                    </div>
-                                    <p className="text-xs text-gray-600 leading-snug line-clamp-2">
-                                      {notif.message}
-                                    </p>
-                                    <div className="flex items-center justify-between mt-1.5">
-                                      <span className="text-[11px] text-gray-400">
-                                        {formatTimeAgo(notif.created_at)}
-                                      </span>
-                                      <div className="flex items-center gap-2">
-                                        <button
-                                          onClick={(e) => handleDeleteNotification(e, notif.id)}
-                                          title="Dismiss notification"
-                                          className="opacity-0 group-hover:opacity-100 p-0.5 text-gray-400 hover:text-rose-600 transition-all rounded hover:bg-rose-50"
-                                        >
-                                          <X className="w-3.5 h-3.5" />
-                                        </button>
-                                        <span className="text-[11px] text-[#0D5C63] font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
-                                          View <ChevronRight className="w-3 h-3" />
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Unread indicator pip */}
-                                  {!notif.is_read && (
-                                    <span className="w-2 h-2 rounded-full bg-[#0D5C63] shrink-0 self-center" />
-                                  )}
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-
-                        {/* Footer */}
-                        {isAdmin && (
-                          <div className="p-2 border-t border-gray-100 bg-gray-50/50 rounded-b-2xl text-center">
-                            <Link
-                              to="/admin"
-                              onClick={() => setIsNotificationsOpen(false)}
-                              className="text-xs font-semibold text-amber-800 hover:text-amber-900 flex items-center justify-center gap-1.5 py-1"
-                            >
-                              <Shield className="w-3.5 h-3.5 text-amber-600" />
-                              Open Admin Moderation Hub
-                            </Link>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Profile Avatar Button */}
-                  <div className="relative">
-                    <button 
-                      onClick={() => {
-                        setIsProfileOpen(!isProfileOpen);
-                        setIsNotificationsOpen(false);
-                      }}
-                      className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-[#0D5C63] transition-colors focus:outline-none"
-                    >
-                      <div className="w-9 h-9 rounded-full bg-[#F5F0E6] flex items-center justify-center text-[#0D5C63] border-2 border-transparent hover:border-[#0D5C63] transition-all overflow-hidden shadow-sm">
-                        {user?.avatar_url ? (
-                          <img src={user.avatar_url} alt={user.name} className="w-full h-full object-cover" />
-                        ) : (
-                          user?.name?.charAt(0).toUpperCase() || 'U'
-                        )}
-                      </div>
-                      <span className="hidden lg:block">{user?.name?.split(' ')[0]}</span>
-                    </button>
-                    
-                    {isProfileOpen && (
-                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl py-2 border border-gray-100 z-50">
-                        <div className="px-4 py-2 border-b border-gray-50 mb-2">
-                          <p className="text-sm font-medium text-gray-900 truncate">{user?.name}</p>
-                          <p className="text-xs text-gray-500 truncate">{user?.email}</p>
-                        </div>
-                        <Link 
-                          to="/profile" 
-                          onClick={() => setIsProfileOpen(false)}
-                          className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#0D5C63] transition-colors"
-                        >
-                          <UserIcon className="w-4 h-4" />
-                          My Profile
-                        </Link>
-                        {isAdmin && (
-                          <Link 
-                            to="/admin" 
-                            onClick={() => setIsProfileOpen(false)}
-                            className="flex items-center gap-2 px-4 py-2 text-sm text-amber-800 bg-amber-50 hover:bg-amber-100 transition-colors font-semibold"
-                          >
-                            <Shield className="w-4 h-4 text-amber-600" />
-                            Admin Dashboard
-                          </Link>
-                        )}
-                        <button 
-                          onClick={() => { logout(); setIsProfileOpen(false); }}
-                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                        >
-                          <LogOut className="w-4 h-4" />
-                          Sign Out
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <Link 
-                  to="/login"
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-[#F59E0B] to-[#D97706] text-black text-xs uppercase tracking-wider font-bold hover:brightness-110 transition-all shadow-md"
+          {/* Desktop links with a sliding underline */}
+          <div className="hidden md:flex items-center gap-1">
+            {navLinks.map((link) => {
+              const isActive = location.pathname.startsWith(link.path);
+              return (
+                <Link
+                  key={link.name}
+                  to={link.path}
+                  className={cn(
+                    'relative px-4 py-2 text-[13px] font-semibold tracking-wide transition-colors',
+                    onPhoto ? (isActive ? 'text-white' : 'text-sand/80 hover:text-white') : isActive ? 'text-ink' : 'text-body hover:text-ink'
+                  )}
                 >
-                  <LogIn className="w-3.5 h-3.5" />
-                  Sign In
+                  {link.name}
+                  {isActive && (
+                    <motion.span
+                      layoutId="nav-underline"
+                      className="absolute left-4 right-4 -bottom-0.5 h-[2px] rounded-full bg-accent"
+                      transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                    />
+                  )}
                 </Link>
-              )}
-            </div>
+              );
+            })}
           </div>
 
-          {/* Mobile Menu Button */}
-          <div className="md:hidden flex items-center gap-2">
+          <div ref={desktopRightRef} className="hidden md:flex items-center gap-1.5">
+            {isAuthenticated ? (
+              <>
+                {/* Notifications */}
+                <div className="relative" ref={notificationsRef}>
+                  <button
+                    onClick={() => {
+                      setIsNotificationsOpen(prev => !prev);
+                      setIsProfileOpen(false);
+                    }}
+                    aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+                    aria-expanded={isNotificationsOpen}
+                    className={iconButton}
+                  >
+                    <Bell className="w-[18px] h-[18px]" />
+                    {unreadCount > 0 && (
+                      <span className="absolute top-1 right-1 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-white">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
+                  </button>
+
+                  <AnimatePresence>
+                    {isNotificationsOpen && (
+                      <motion.div
+                        {...dropdownMotion}
+                        className="absolute right-0 mt-3 w-96 origin-top-right bg-paper rounded-3xl card-shadow-hover border border-line overflow-hidden z-50"
+                      >
+                        <div className="flex items-center justify-between gap-3 px-4 py-3.5 border-b border-line">
+                          <div className="flex items-center gap-2">
+                            <span className="font-display font-semibold text-ink">Notifications</span>
+                            {unreadCount > 0 && <span className="badge badge-amber">{unreadCount} new</span>}
+                          </div>
+                          {notificationActions}
+                        </div>
+                        <div className="max-h-[380px] overflow-y-auto divide-y divide-line" data-lenis-prevent>
+                          {notificationList(false)}
+                        </div>
+                        {isAdmin && (
+                          <Link
+                            to="/admin"
+                            onClick={() => setIsNotificationsOpen(false)}
+                            className="flex items-center justify-center gap-1.5 py-3 border-t border-line text-xs font-bold text-ink hover:bg-sand transition-colors"
+                          >
+                            <Shield className="w-3.5 h-3.5" /> Open moderation hub
+                          </Link>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Profile */}
+                <div className="relative" ref={profileRef}>
+                  <button
+                    onClick={() => {
+                      setIsProfileOpen(!isProfileOpen);
+                      setIsNotificationsOpen(false);
+                    }}
+                    aria-expanded={isProfileOpen}
+                    className={cn(
+                      'flex items-center gap-2 pl-1 pr-3 py-1 rounded-full text-[13px] font-semibold transition-colors',
+                      onPhoto ? 'text-sand hover:bg-white/15' : 'text-ink hover:bg-ink/[0.06]'
+                    )}
+                  >
+                    <span className="w-9 h-9 rounded-full bg-accent-soft text-accent-text flex items-center justify-center font-bold overflow-hidden ring-2 ring-white/60">
+                      {user?.avatar_url ? (
+                        <img src={user.avatar_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        user?.name?.charAt(0).toUpperCase() || 'U'
+                      )}
+                    </span>
+                    <span className="hidden lg:block max-w-[8rem] truncate" title={user?.name}>
+                      {user?.name?.split(' ')[0]}
+                    </span>
+                  </button>
+
+                  <AnimatePresence>
+                    {isProfileOpen && (
+                      <motion.div
+                        {...dropdownMotion}
+                        className="absolute right-0 mt-3 w-60 origin-top-right bg-paper rounded-3xl card-shadow-hover border border-line py-2 z-50"
+                      >
+                        <div className="px-4 py-2.5 border-b border-line mb-1">
+                          <p className="text-sm font-semibold text-ink truncate">{user?.name}</p>
+                          <p className="text-xs text-muted truncate">{user?.email}</p>
+                        </div>
+                        <Link to="/profile" className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-body hover:bg-sand hover:text-ink transition-colors">
+                          <UserIcon className="w-4 h-4" /> My profile
+                        </Link>
+                        {isAdmin && (
+                          <Link to="/admin" className="flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-accent-text hover:bg-sand transition-colors">
+                            <Shield className="w-4 h-4" /> Admin dashboard
+                          </Link>
+                        )}
+                        <button
+                          onClick={() => { logout(); setIsProfileOpen(false); }}
+                          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-[#B42318] hover:bg-[#F8DEDA]/50 transition-colors"
+                        >
+                          <LogOut className="w-4 h-4" /> Sign out
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </>
+            ) : (
+              <Link to="/login" className="btn-primary !py-2.5 !px-5 !text-[13px] ml-1" style={onPhoto ? { background: 'var(--color-sand)', color: 'var(--color-ink)' } : undefined}>
+                <LogIn className="w-3.5 h-3.5" /> Sign in
+              </Link>
+            )}
+          </div>
+
+          {/* Mobile controls */}
+          <div ref={mobileRightRef} className="md:hidden flex items-center gap-1">
             {isAuthenticated && (
-              <button 
+              <button
                 onClick={() => {
                   setMobileNotifsOpen(!mobileNotifsOpen);
                   setIsMenuOpen(false);
                 }}
-                className="relative p-2 text-gray-600 hover:text-[#0D5C63]"
+                aria-label="Notifications"
+                className={iconButton}
               >
-                <Bell className="w-6 h-6" />
+                <Bell className="w-5 h-5" />
                 {unreadCount > 0 && (
-                  <span className="absolute top-1 right-1 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white">
+                  <span className="absolute top-1 right-1 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-white">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
               </button>
             )}
-            <button 
+            <button
               onClick={() => {
                 setIsMenuOpen(!isMenuOpen);
                 setMobileNotifsOpen(false);
               }}
-              className="p-2 text-gray-600 hover:text-[#0D5C63]"
+              aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={isMenuOpen}
+              className={iconButton}
             >
-              <Menu className="w-6 h-6" />
+              <span className="relative w-5 h-3.5 block">
+                <span className={cn('absolute left-0 right-0 h-[2px] rounded-full bg-current transition-all duration-300', isMenuOpen ? 'top-1.5 rotate-45' : 'top-0')} />
+                <span className={cn('absolute left-0 right-0 h-[2px] rounded-full bg-current transition-all duration-300', isMenuOpen ? 'top-1.5 -rotate-45' : 'top-3')} />
+              </span>
             </button>
           </div>
         </div>
       </div>
-      
-      {/* Mobile Notifications Drawer */}
-      {mobileNotifsOpen && isAuthenticated && (
-        <div className="md:hidden border-t border-gray-200 bg-white px-4 py-3 shadow-lg">
-          <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-gray-900 text-sm">Notifications</span>
-              {unreadCount > 0 && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0D5C63]/10 text-[#0D5C63]">
-                  {unreadCount} unread
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-3">
-              {unreadCount > 0 && (
-                <button
-                  onClick={handleMarkAllRead}
-                  className="text-xs text-gray-500 font-medium"
-                >
-                  Mark all read
-                </button>
-              )}
-              {notifications.length > 0 && (
-                <button
-                  onClick={handleClearAll}
-                  className="text-xs text-gray-500 font-medium"
-                >
-                  Clear all
-                </button>
-              )}
-              <button onClick={() => setMobileNotifsOpen(false)} className="text-gray-400 p-1">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
 
-          <div className="max-h-80 overflow-y-auto divide-y divide-gray-100 mt-2">
-            {notifications.length === 0 ? (
-              <p className="text-center text-xs text-gray-400 py-6">No notifications yet.</p>
-            ) : (
-              notifications.map((notif) => {
-                const meta = getNotificationMeta(notif.type);
-                const IconComponent = meta.icon;
-                return (
-                  <div
-                    key={notif.id}
-                    onClick={() => {
-                      handleNotificationClick(notif);
-                      setMobileNotifsOpen(false);
-                    }}
-                    className={cn(
-                      "py-2.5 px-2 flex items-start gap-2.5 rounded-lg active:bg-gray-100",
-                      !notif.is_read ? "bg-emerald-50/40" : ""
-                    )}
-                  >
-                    <div className={cn("p-1.5 rounded-lg shrink-0 mt-0.5", meta.bgColor)}>
-                      <IconComponent className={cn("w-3.5 h-3.5", meta.iconColor)} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-gray-900 truncate">{notif.title}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-gray-400">{formatTimeAgo(notif.created_at)}</span>
-                          <button
-                            onClick={(e) => handleDeleteNotification(e, notif.id)}
-                            title="Dismiss notification"
-                            className="p-1 text-gray-400 hover:text-rose-600 rounded"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{notif.message}</p>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      )}
+      {/* Mobile notifications drawer */}
+      <AnimatePresence>
+        {mobileNotifsOpen && isAuthenticated && (
+          <motion.div {...dropdownMotion} className="md:hidden mx-auto max-w-6xl mt-2 rounded-3xl border border-line bg-paper card-shadow-hover overflow-hidden">
+            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-line">
+              <span className="font-display font-semibold text-ink">Notifications</span>
+              <div className="flex items-center gap-2">
+                {notificationActions}
+                <button onClick={() => setMobileNotifsOpen(false)} className="text-muted hover:text-ink p-1" aria-label="Close notifications">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto divide-y divide-line" data-lenis-prevent>
+              {notificationList(true)}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Mobile Navigation Menu */}
-      {isMenuOpen && (
-        <div className="md:hidden border-t border-gray-200 bg-white">
-          <div className="px-4 py-4 space-y-4">
-            {navLinks.map((link) => (
-              <Link
-                key={link.name}
-                to={link.path}
-                className="block text-sm font-medium text-gray-700 hover:text-[#F59E0B]"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                {link.name}
-              </Link>
-            ))}
-            <Link 
-              to="/submit" 
-              className="block text-sm font-medium text-[#0D5C63]"
-              onClick={() => setIsMenuOpen(false)}
+      {/* Mobile full-screen menu */}
+      <AnimatePresence>
+        {isMenuOpen && (
+          <motion.div
+            initial={reduced ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="md:hidden fixed inset-0 -z-10 bg-sand pt-28 px-6 pb-10 flex flex-col"
+          >
+            <motion.ul
+              className="flex flex-col gap-1"
+              initial="hidden"
+              animate="show"
+              variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06, delayChildren: 0.08 } } }}
             >
-              Submit a Place
-            </Link>
-            
-            {isAuthenticated ? (
-              <>
-                <Link 
-                  to="/profile" 
-                  className="block text-sm font-medium text-[#0D5C63]"
-                  onClick={() => setIsMenuOpen(false)}
+              {[{ name: 'Home', path: '/' }, ...navLinks, ...(isAuthenticated ? [{ name: 'My profile', path: '/profile' }] : [])].map((link) => (
+                <motion.li
+                  key={link.path}
+                  variants={{ hidden: { opacity: 0, y: 24 }, show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: EASE } } }}
                 >
-                  My Profile
-                </Link>
-                {isAdmin && (
-                  <Link 
-                    to="/admin" 
-                    className="block text-sm font-medium text-amber-800 font-semibold"
-                    onClick={() => setIsMenuOpen(false)}
+                  <Link
+                    to={link.path}
+                    className="flex items-center justify-between py-3 border-b border-line font-display text-[2rem] leading-tight text-ink"
                   >
-                    Admin Dashboard
+                    {link.name}
+                    <ArrowUpRight className="w-6 h-6 text-accent" />
                   </Link>
-                )}
-                <button 
-                  onClick={() => { logout(); setIsMenuOpen(false); }}
-                  className="block text-sm font-medium text-red-600 text-left w-full"
-                >
-                  Sign Out
+                </motion.li>
+              ))}
+            </motion.ul>
+
+            <div className="mt-auto flex flex-col gap-3">
+              {isAdmin && (
+                <Link to="/admin" className="btn-ghost w-full">
+                  <Shield className="w-4 h-4" /> Admin dashboard
+                </Link>
+              )}
+              {isAuthenticated ? (
+                <button onClick={() => { logout(); setIsMenuOpen(false); }} className="btn-ghost w-full !text-[#B42318]">
+                  <LogOut className="w-4 h-4" /> Sign out
                 </button>
-              </>
-            ) : (
-              <Link 
-                to="/login"
-                className="block text-sm font-medium text-[#F59E0B]"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Sign In
+              ) : (
+                <Link to="/login" className="btn-primary w-full">
+                  <LogIn className="w-4 h-4" /> Sign in
+                </Link>
+              )}
+              <Link to="/submit" className="btn-accent w-full">
+                <Plus className="w-4 h-4" /> Share a hidden gem
               </Link>
-            )}
-          </div>
-        </div>
-      )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </nav>
   );
 };
-
