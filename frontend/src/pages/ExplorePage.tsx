@@ -4,6 +4,7 @@ import { Search, X } from 'lucide-react';
 import type { Place } from '../types';
 import { PLACE_CATEGORIES } from '../types';
 import { placesApi } from '../api/client';
+import { fuzzySearch } from '../utils/fuzzySearch';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { PlaceCard } from '../components/places/PlaceCard';
 
@@ -37,12 +38,13 @@ export const ExplorePage = () => {
   const [searchText, setSearchText] = useState(query);
   const lastWrittenQuery = useRef(query);
 
-  // Only the category hits the network; text and budget filter locally
+  // Load every place once; search, category and budget all filter locally so we can
+  // tell the user when a match exists outside the current filters
   useEffect(() => {
     const fetchPlaces = async () => {
       setIsLoading(true);
       try {
-        const results = await placesApi.getPlaces(categoryFilter ? { category: categoryFilter } : {});
+        const results = await placesApi.getPlaces();
         setPlaces(results);
       } catch (error) {
         console.error('Failed to fetch places', error);
@@ -52,7 +54,7 @@ export const ExplorePage = () => {
     };
 
     fetchPlaces();
-  }, [categoryFilter]);
+  }, []);
 
   // Debounce search text → URL
   useEffect(() => {
@@ -81,29 +83,35 @@ export const ExplorePage = () => {
     }
   }, [query]);
 
-  const visiblePlaces = useMemo(() => {
-    let results = places;
+  const { visiblePlaces, isApproximate, hiddenByFilters } = useMemo(() => {
+    // Typo-tolerant, ranked by relevance ("chruchstreet" still finds Church Street)
+    const search = query ? fuzzySearch(places, query) : { items: places, isApproximate: false };
 
-    if (query) {
-      const q = query.toLowerCase();
-      results = results.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.description.toLowerCase().includes(q) ||
-          p.category.toLowerCase().includes(q)
-      );
-    }
-
-    if (budgetFilter) {
-      const max = Number(budgetFilter);
-      results = results.filter((p) => {
+    const max = budgetFilter ? Number(budgetFilter) : null;
+    const inFilters = (p: Place) => {
+      if (categoryFilter && p.category.toLowerCase() !== categoryFilter.toLowerCase()) return false;
+      if (max !== null) {
         const cost = Number(p.budget_tier || 0);
-        return !Number.isNaN(cost) && cost <= max;
-      });
-    }
+        if (Number.isNaN(cost) || cost > max) return false;
+      }
+      return true;
+    };
 
-    return results;
-  }, [places, query, budgetFilter]);
+    const filtered = search.items.filter(inFilters);
+    return {
+      visiblePlaces: filtered,
+      isApproximate: search.isApproximate,
+      // Matches for the search that the category/budget filters are hiding
+      hiddenByFilters: query ? search.items.length - filtered.length : 0,
+    };
+  }, [places, query, categoryFilter, budgetFilter]);
+
+  const showOutsideFilters = () => {
+    const params = new URLSearchParams(searchParams);
+    params.delete('category');
+    params.delete('budget');
+    setSearchParams(params);
+  };
 
   const updateParam = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams);
@@ -157,6 +165,9 @@ export const ExplorePage = () => {
               placeholder="Search trails, waterfalls, cafes…"
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               className="flex-1 bg-transparent text-white placeholder-[#64748B] text-sm focus:outline-none"
               aria-label="Search places"
             />
@@ -246,20 +257,61 @@ export const ExplorePage = () => {
             <div className="w-14 h-14 rounded-2xl bg-[#F59E0B]/10 border border-[#F59E0B]/20 flex items-center justify-center mb-5">
               <Search className="w-6 h-6 text-[#F59E0B]" />
             </div>
-            <h3 className="text-heading text-white text-xl mb-2">Nothing matches that yet</h3>
-            <p className="text-[#64748B] text-sm max-w-sm mb-8">
-              Try a broader search or clear your filters. New places are added by the community every week.
-            </p>
-            <button onClick={clearAll} className="btn-primary">
-              Reset filters
-            </button>
+            {hiddenByFilters > 0 ? (
+              <>
+                <h3 className="text-heading text-white text-xl mb-2">
+                  Not in {categoryFilter || 'this budget'}
+                </h3>
+                <p className="text-[#64748B] text-sm max-w-sm mb-8">
+                  We found {hiddenByFilters} {hiddenByFilters === 1 ? 'place' : 'places'} for “{query}” outside your current filters.
+                </p>
+                <button onClick={showOutsideFilters} className="btn-primary">
+                  Show {hiddenByFilters === 1 ? 'it' : 'them'}
+                </button>
+              </>
+            ) : query ? (
+              <>
+                <h3 className="text-heading text-white text-xl mb-2">No places match “{query}”</h3>
+                <p className="text-[#64748B] text-sm max-w-sm mb-8">
+                  Check the spelling, try fewer words, or search by area or category, like “lake” or “Jayanagar”.
+                </p>
+                <button onClick={clearAll} className="btn-primary">
+                  Clear search
+                </button>
+              </>
+            ) : (
+              <>
+                <h3 className="text-heading text-white text-xl mb-2">Nothing here yet</h3>
+                <p className="text-[#64748B] text-sm max-w-sm mb-8">
+                  No places fit these filters. New places are added by the community every week.
+                </p>
+                <button onClick={clearAll} className="btn-primary">
+                  Reset filters
+                </button>
+              </>
+            )}
           </div>
         ) : (
+          <>
+          {isApproximate && (
+            <p className="mb-6 text-sm text-[#CBD5E1]">
+              No exact match for <span className="text-white font-semibold">“{query}”</span>. Showing the closest places.
+            </p>
+          )}
+          {hiddenByFilters > 0 && (
+            <p className="mb-6 text-sm text-[#64748B]">
+              {hiddenByFilters} more {hiddenByFilters === 1 ? 'match' : 'matches'} outside your filters.{' '}
+              <button onClick={showOutsideFilters} className="font-semibold text-[#F59E0B] hover:text-[#FBBF24] transition-colors">
+                Show all
+              </button>
+            </p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {visiblePlaces.map((place, i) => (
               <PlaceCard key={place.id} place={place} index={Math.min(i, 8)} visible={gridVisible} />
             ))}
           </div>
+          </>
         )}
       </section>
     </div>
