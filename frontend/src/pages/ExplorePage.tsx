@@ -231,8 +231,6 @@ export const ExplorePage = () => {
           style={reduced ? undefined : { y: textY, opacity: textOpacity }}
           className="on-photo relative z-10 h-full max-w-7xl mx-auto px-6 sm:px-10 flex flex-col justify-end pb-16 sm:pb-20"
         >
-          <p className="section-label mb-6 animate-fade-up">Explore · within a day of Bengaluru</p>
-
           <SplitHeading
             as="h1"
             onMount
