@@ -51,6 +51,11 @@ export const PHOTOS = {
     alt: 'Cars lined along the ridge road to Mullayanagiri peak, Chikmagalur',
     credit: { name: 'Umesh Soni', url: 'https://unsplash.com/photos/the-sun-shines-brightly-over-a-grassy-hill-CgQBRoZm34Y' },
   },
+  chikmagalurHills: {
+    file: 'chikmagalur-hills', width: 1600, height: 1067, place: 'Chikmagalur',
+    alt: 'A traveller raising both arms towards the green, forested hills of Chikmagalur',
+    credit: { name: 'Mayank Agarwal', url: 'https://unsplash.com/photos/man-in-blue-shirt-raising-his-hands-M-bDdjOE-JM' },
+  },
 } satisfies Record<string, Photo>;
 
 export type PhotoKey = keyof typeof PHOTOS;

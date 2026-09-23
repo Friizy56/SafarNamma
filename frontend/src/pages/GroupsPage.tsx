@@ -64,7 +64,7 @@ const thisWeekend = () => {
 /* ── The three steps, told while the section is pinned ── */
 const STEPS: { icon: typeof Search; title: string; body: string; photo: PhotoKey }[] = [
   { icon: Search, title: 'Pick a trip', body: 'Browse trips by date, budget and seats left. Every trip shows where you meet and what it costs.', photo: 'skandagiri' },
-  { icon: UserPlus, title: 'Ask to join', body: 'Send a request with one tap. The host sees who you are before saying yes, so every group stays safe.', photo: 'mullayanagiri' },
+  { icon: UserPlus, title: 'Ask to join', body: 'Send a request with one tap. The host sees who you are before saying yes, so every group stays safe.', photo: 'chikmagalurHills' },
   { icon: Unlock, title: 'Chat unlocks', body: "Once you're approved, the WhatsApp or Telegram link appears. Plan the ride, split fuel, and go.", photo: 'friends' },
 ];
 
