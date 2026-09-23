@@ -32,6 +32,7 @@ import { SplitHeading } from '../components/motion/SplitHeading';
 import { Reveal } from '../components/motion/Reveal';
 import { Counter } from '../components/motion/Counter';
 import { Chip } from '../components/ui/Chip';
+import { useIsStuck } from '../hooks/useIsStuck';
 import { photoProps, type PhotoKey } from '../utils/images';
 import { isPastTrip, seatsLeft } from '../utils/groups';
 import { setScrollLocked } from '../hooks/useLenis';
@@ -182,6 +183,8 @@ export const GroupsPage = () => {
   const [places, setPlaces] = useState<Place[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [quick, setQuick] = useState<QuickFilter>('all');
+  const filterBarRef = useRef<HTMLDivElement>(null);
+  const filterBarStuck = useIsStuck(filterBarRef, 108); // top-[6.75rem]
   const gridRef = useRef<HTMLElement>(null);
 
   // Modal state
@@ -450,7 +453,8 @@ export const GroupsPage = () => {
 
       {/* ── Filters (sticky only while the trips are on screen) + trips ── */}
       <div>
-      <div className="sticky z-30 top-[6.75rem] mt-8">
+      <div ref={filterBarRef} className="sticky z-30 top-[6.75rem] mt-8">
+        <div className="sticky-shelf" data-on={filterBarStuck} aria-hidden />
         <div className="max-w-7xl mx-auto px-3 sm:px-page">
           <div className="glass rounded-full card-shadow flex items-center gap-2 p-2">
             <div className="flex items-center gap-2 overflow-x-auto scrollbar-none flex-1 min-w-0" data-lenis-prevent>

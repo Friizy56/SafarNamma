@@ -28,6 +28,7 @@ import { fallbackPhoto, optimizeImageUrl, photoProps } from '../utils/images';
 import { formatBudget, shortLocation } from '../utils/format';
 import { categoryIcon } from '../utils/categories';
 import { Chip } from '../components/ui/Chip';
+import { useIsStuck } from '../hooks/useIsStuck';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -98,6 +99,8 @@ export const ExplorePage = () => {
   const [searchText, setSearchText] = useState(query);
   const lastWrittenQuery = useRef(query);
   const resultsRef = useRef<HTMLElement>(null);
+  const filterBarRef = useRef<HTMLDivElement>(null);
+  const filterBarStuck = useIsStuck(filterBarRef, 108); // top-[6.75rem]
 
   // Load every place once; search, category and budget all filter locally so we can
   // tell the user when a match exists outside the current filters
@@ -301,7 +304,8 @@ export const ExplorePage = () => {
       </section>
 
       {/* ── Sticky filter bar ── */}
-      <div className="sticky z-30 top-[6.75rem] mt-2">
+      <div ref={filterBarRef} className="sticky z-30 top-[6.75rem] mt-2">
+        <div className="sticky-shelf" data-on={filterBarStuck} aria-hidden />
         <div className="max-w-7xl mx-auto px-3 sm:px-page">
           <div className="glass rounded-full card-shadow flex items-center gap-2 pl-2 pr-2 py-2">
             <div className="flex items-center gap-2 overflow-x-auto scrollbar-none flex-1 min-w-0" data-lenis-prevent>
