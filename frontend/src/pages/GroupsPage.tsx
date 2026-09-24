@@ -23,11 +23,16 @@ import {
   UserPlus,
   Unlock,
   Lock,
+  MapPin,
+  Minus,
+  Check,
+  CalendarDays,
 } from 'lucide-react';
 import type { Group, Place } from '../types';
 import { groupsApi, placesApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { GroupCard } from '../components/groups/GroupCard';
+import { PlacePicker } from '../components/groups/PlacePicker';
 import { SplitHeading } from '../components/motion/SplitHeading';
 import { Reveal } from '../components/motion/Reveal';
 import { Counter } from '../components/motion/Counter';
@@ -61,6 +66,68 @@ const thisWeekend = () => {
   end.setDate(end.getDate() + 2);
   return [start.getTime(), end.getTime()] as const;
 };
+
+/* ── Start-a-trip form helpers ── */
+const TITLE_MAX = 80;
+const PLAN_MAX = 800;
+const COST_PRESETS = [0, 300, 500, 1000, 2000];
+const GEAR_PRESETS = ['Water', 'ID card', 'Helmet', 'Trekking shoes', 'Rain jacket', 'Torch', 'Snacks'];
+const STOP_PLACEHOLDERS = ['e.g. Nandi Hills sunrise point', 'e.g. Indian Paratha Company for chai', 'e.g. Devanahalli Fort'];
+const PLAN_TEMPLATE = `5:30 AM – Meet and leave together
+7:00 AM – Reach, explore, photos
+10:00 AM – Breakfast stop
+1:00 PM – Head back
+
+Travel: bikes / carpool (split fuel)
+Who should join: `;
+
+/** Date → the `YYYY-MM-DDTHH:mm` string a datetime-local input expects, in local time. */
+const toLocalInput = (d: Date) => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+/** Next occurrence of a weekday (0 Sun … 6 Sat) at the given hour, always in the future. */
+const nextWeekdayAt = (weekday: number, hour: number) => {
+  const d = new Date();
+  d.setHours(hour, 0, 0, 0);
+  let diff = (weekday - d.getDay() + 7) % 7;
+  if (diff === 0 && d.getTime() <= Date.now()) diff = 7;
+  d.setDate(d.getDate() + diff);
+  return d;
+};
+
+const tomorrowAt = (hour: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(hour, 0, 0, 0);
+  return d;
+};
+
+const DEFAULT_GEAR = ['Water', 'ID card', 'Helmet'];
+const DEFAULT_SAFETY = 'Respect everyone in the group.';
+
+/** Gear chips + free-text notes → the single safety_notes string the API stores. */
+const composeSafetyNotes = (gear: string[], notes: string) =>
+  [gear.length ? `Bring: ${gear.join(', ')}.` : '', notes.trim()].filter(Boolean).join(' ') || null;
+
+const FormSection = ({ n, title, optional, last, children }: { n: number; title: string; optional?: boolean; last?: boolean; children: React.ReactNode }) => (
+  <section className={cn('relative pl-11 pb-9', !last && 'mb-1')}>
+    {!last && <span className="absolute left-[15px] top-9 bottom-0 w-px bg-line-strong" aria-hidden />}
+    <span className="absolute left-0 top-0 w-8 h-8 rounded-full bg-ink text-sand text-xs font-bold flex items-center justify-center">{n}</span>
+    <h3 className="font-display text-xl text-ink leading-8 mb-4 flex items-baseline gap-2">
+      {title}
+      {optional && <span className="font-body text-xs font-medium text-muted">Optional</span>}
+    </h3>
+    {children}
+  </section>
+);
+
+const FieldError = ({ children }: { children: React.ReactNode }) => (
+  <p className="mt-1.5 text-xs font-bold text-[#A8321F]" role="alert">
+    {children}
+  </p>
+);
 
 /* ── The three steps, told while the section is pinned ── */
 const STEPS: { icon: typeof Search; title: string; body: string; photo: PhotoKey }[] = [
@@ -191,6 +258,10 @@ export const GroupsPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+  const [showErrors, setShowErrors] = useState(false);
+  const [gear, setGear] = useState<string[]>(DEFAULT_GEAR);
+  const [openedAt, setOpenedAt] = useState(0);
+  const lastPlaceId = useRef('');
 
   // Form inputs
   const [formData, setFormData] = useState({
@@ -202,7 +273,7 @@ export const GroupsPage = () => {
     estimated_cost: 500,
     max_members: 6,
     chat_link: '',
-    safety_notes: 'Carry water, helmet, and ID card. Respect everyone in the group.',
+    safety_notes: DEFAULT_SAFETY,
   });
 
   // Multi-stop custom curation state
@@ -280,12 +351,42 @@ export const GroupsPage = () => {
       destination_id: initialDest,
     }));
     setFormError('');
+    setShowErrors(false);
+    setOpenedAt(Date.now());
     setIsModalOpen(true);
   };
+
+  // Validation for the start-a-trip sheet
+  const isCustomRoute = formData.destination_id === 'custom';
+  const destinationOk = isCustomRoute ? customStops.filter((s) => s.trim()).length >= 2 : !!formData.destination_id;
+  const titleOk = formData.title.trim().length >= 5;
+  const planOk = formData.description.trim().length >= 20;
+  const dateOk = !!formData.trip_date && new Date(formData.trip_date).getTime() > openedAt;
+  const meetingOk = formData.meeting_area.trim().length > 0;
+  const requiredChecks = [destinationOk, titleOk, planOk, dateOk, meetingOk];
+  const requiredDone = requiredChecks.filter(Boolean).length;
+  const chatLink = formData.chat_link.trim();
+  const chatOk = chatLink ? /^https?:\/\/\S+\.\S+/i.test(chatLink) : null;
+  const chatApp = chatOk ? (/whatsapp\.com/i.test(chatLink) ? 'WhatsApp' : /(t\.me|telegram\.)/i.test(chatLink) ? 'Telegram' : null) : null;
+  const datePresets = useMemo(
+    () => [
+      { label: 'Tomorrow, 6 AM', value: toLocalInput(tomorrowAt(6)) },
+      { label: 'Sat, 5:30 AM', value: toLocalInput(new Date(nextWeekdayAt(6, 5).getTime() + 30 * 60_000)) },
+      { label: 'Sun, 6 AM', value: toLocalInput(nextWeekdayAt(0, 6)) },
+    ],
+    // Recompute each time the sheet opens so "tomorrow" stays accurate
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [openedAt],
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
+    if (requiredDone < requiredChecks.length || chatOk === false) {
+      setShowErrors(true);
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('[role="dialog"] .field-error')?.focus());
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -312,7 +413,7 @@ export const GroupsPage = () => {
         estimated_cost: Number(formData.estimated_cost),
         max_members: Number(formData.max_members),
         chat_link: formData.chat_link.trim() || null,
-        safety_notes: formData.safety_notes.trim() || null,
+        safety_notes: composeSafetyNotes(gear, formData.safety_notes),
       } as Parameters<typeof groupsApi.createGroup>[0]);
 
       if (created) {
@@ -326,10 +427,11 @@ export const GroupsPage = () => {
           estimated_cost: 500,
           max_members: 6,
           chat_link: '',
-          safety_notes: 'Carry water, helmet, and ID card. Respect everyone in the group.',
+          safety_notes: DEFAULT_SAFETY,
         });
         setCustomStopCount(2);
         setCustomStops(['', '']);
+        setGear(DEFAULT_GEAR);
         await fetchGroupsAndPlaces();
       }
     } catch (err: any) {
@@ -615,257 +717,373 @@ export const GroupsPage = () => {
               className="relative w-full max-w-xl h-full bg-sand overflow-y-auto shadow-2xl"
               data-lenis-prevent
             >
-              <div className="sticky top-0 z-10 bg-sand/90 backdrop-blur border-b border-line px-6 sm:px-8 py-5 flex items-center justify-between">
-                <div>
-                  <p className="section-label">New trip</p>
-                  <h2 id="new-trip-title" className="font-display text-2xl text-ink mt-1">
-                    Start a travel group
-                  </h2>
+              <div className="sticky top-0 z-30 bg-sand/90 backdrop-blur border-b border-line">
+                <div className="px-6 sm:px-8 pt-5 pb-4 flex items-start justify-between gap-4">
+                  <div>
+                    <p className="section-label">New trip</p>
+                    <h2 id="new-trip-title" className="font-display text-2xl text-ink mt-1">
+                      Start a travel group
+                    </h2>
+                    <p className="text-sm text-muted mt-1.5">You set the plan. You approve who gets the chat link.</p>
+                  </div>
+                  <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 rounded-full hover:bg-stone text-ink flex items-center justify-center transition-colors shrink-0" aria-label="Close">
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 rounded-full hover:bg-stone text-ink flex items-center justify-center transition-colors" aria-label="Close">
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="h-1 bg-line" role="progressbar" aria-label="Required details filled" aria-valuemin={0} aria-valuemax={requiredChecks.length} aria-valuenow={requiredDone}>
+                  <motion.div className="h-full bg-accent" initial={false} animate={{ width: `${(requiredDone / requiredChecks.length) * 100}%` }} transition={{ duration: 0.4, ease: EASE }} />
+                </div>
               </div>
 
-              <div className="px-6 sm:px-8 py-7">
-                <p className="text-sm text-muted mb-7">Set the plan and the size of your group. You approve who gets the chat link.</p>
-
+              <form onSubmit={handleSubmit} noValidate className="px-6 sm:px-8 pt-7">
                 {formError && (
                   <div className="mb-6 bg-[#FDF3F1] border border-[#F2C9C2] text-[#8A1C12] p-4 rounded-2xl text-sm" role="alert">
                     {formError}
                   </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* Destination Select */}
-                  <div>
-                    <label htmlFor="trip-destination" className="field-label !flex items-center justify-between">
-                      <span>Destination *</span>
-                      <span className="font-medium text-muted">One place or a custom route</span>
-                    </label>
-                    <select
-                      id="trip-destination"
-                      required
-                      value={formData.destination_id}
-                      onChange={(e) => setFormData({ ...formData, destination_id: e.target.value })}
-                      className="field"
+                {/* ── 1 · Where ── */}
+                <FormSection n={1} title="Where are you going?">
+                  <div className="flex gap-2 mb-4" role="group" aria-label="Destination type">
+                    <Chip group="dest-mode" active={!isCustomRoute} onClick={() => setFormData({ ...formData, destination_id: lastPlaceId.current || String(places[0]?.id ?? '') })}>
+                      <MapPin className="w-3.5 h-3.5" /> One place
+                    </Chip>
+                    <Chip
+                      group="dest-mode"
+                      active={isCustomRoute}
+                      onClick={() => {
+                        if (!isCustomRoute) lastPlaceId.current = formData.destination_id;
+                        setFormData({ ...formData, destination_id: 'custom' });
+                      }}
                     >
-                      <option value="custom">✨ Custom multi-stop route (2+ places)</option>
-                      <optgroup label="Or choose a place from SafarNamma">
-                        {places.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name} ({p.category})
-                          </option>
-                        ))}
-                      </optgroup>
-                    </select>
+                      <Route className="w-3.5 h-3.5" /> Multi-stop route
+                    </Chip>
                   </div>
 
-                  {/* Customized Multi-Stop Route Builder Panel */}
-                  <AnimatePresence initial={false}>
-                    {formData.destination_id === 'custom' && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.4, ease: EASE }}
-                        className="overflow-hidden"
-                      >
-                        <div className="rounded-3xl border border-line bg-paper p-5 space-y-4">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              <span className="w-9 h-9 rounded-xl bg-accent-soft text-accent-text flex items-center justify-center">
-                                <Sparkles className="w-4 h-4" />
-                              </span>
-                              <div>
-                                <p className="text-sm font-bold text-ink">Your route</p>
-                                <p className="text-xs text-muted">How many stops?</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1 bg-sand p-1 rounded-full border border-line self-start sm:self-auto">
-                              {[2, 3, 4, 5].map((num) => (
-                                <button
-                                  key={num}
-                                  type="button"
-                                  onClick={() => handleStopCountChange(num)}
-                                  className={cn('px-3 py-1.5 rounded-full text-xs font-bold transition-colors', customStopCount === num ? 'bg-ink text-sand' : 'text-body hover:text-ink')}
-                                >
-                                  {num} stops
-                                </button>
-                              ))}
-                            </div>
+                  {!isCustomRoute ? (
+                    <PlacePicker id="trip-destination" places={places} value={formData.destination_id} onChange={(id) => setFormData({ ...formData, destination_id: id })} />
+                  ) : (
+                    <div className="rounded-3xl border border-line bg-paper p-5 space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <span className="w-9 h-9 rounded-xl bg-accent-soft text-accent-text flex items-center justify-center">
+                            <Sparkles className="w-4 h-4" />
+                          </span>
+                          <div>
+                            <p className="text-sm font-bold text-ink">Your route</p>
+                            <p className="text-xs text-muted">Add the stops in order</p>
                           </div>
-
-                          <ol className="relative space-y-3 pl-1">
-                            <span className="absolute left-[15px] top-4 bottom-4 border-l-2 border-dashed border-line-strong" aria-hidden />
-                            {customStops.map((stop, idx) => (
-                              <li key={idx} className="relative flex items-center gap-3">
-                                <span className="relative z-10 w-7 h-7 rounded-full bg-ink text-sand text-xs font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
-                                <input
-                                  type="text"
-                                  required
-                                  placeholder={
-                                    idx === 0
-                                      ? 'e.g. Nandi Hills sunrise point'
-                                      : idx === 1
-                                        ? 'e.g. Indian Paratha Company for chai'
-                                        : idx === 2
-                                          ? 'e.g. Devanahalli Fort'
-                                          : `Stop ${idx + 1}`
-                                  }
-                                  value={stop}
-                                  onChange={(e) => handleStopChange(idx, e.target.value)}
-                                  className="field !py-2.5"
-                                  aria-label={`Stop ${idx + 1}`}
-                                />
-                              </li>
-                            ))}
-                          </ol>
-
-                          {customStops.some((s) => s.trim()) && (
-                            <div className="rounded-2xl bg-sand border border-line p-3 flex items-center gap-2.5 text-xs text-body">
-                              <Route className="w-4 h-4 text-accent-text shrink-0" />
-                              <span className="font-bold text-ink shrink-0">Route:</span>
-                              <span className="truncate">{customStops.filter((s) => s.trim()).join(' ➔ ')}</span>
-                            </div>
-                          )}
                         </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                        <div className="flex items-center gap-1 bg-sand p-1 rounded-full border border-line self-start sm:self-auto" role="group" aria-label="Number of stops">
+                          {[2, 3, 4, 5].map((num) => (
+                            <button
+                              key={num}
+                              type="button"
+                              aria-pressed={customStopCount === num}
+                              onClick={() => handleStopCountChange(num)}
+                              className={cn('w-9 py-1.5 rounded-full text-xs font-bold transition-colors', customStopCount === num ? 'bg-ink text-sand' : 'text-body hover:text-ink')}
+                            >
+                              {num}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
 
-                  <div>
-                    <label htmlFor="trip-title" className="field-label">
-                      Trip title *
-                    </label>
-                    <input
-                      id="trip-title"
-                      type="text"
-                      required
-                      placeholder="e.g. Sunrise jeep ride & chai at Nandi Hills"
-                      value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      className="field"
-                    />
+                      <ol className="relative space-y-3 pl-1">
+                        <span className="absolute left-[15px] top-4 bottom-4 border-l-2 border-dashed border-line-strong" aria-hidden />
+                        {customStops.map((stop, idx) => (
+                          <li key={idx} className="relative flex items-center gap-3">
+                            <span className="relative z-10 w-7 h-7 rounded-full bg-ink text-sand text-xs font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
+                            <input
+                              type="text"
+                              placeholder={STOP_PLACEHOLDERS[idx] ?? `Stop ${idx + 1}`}
+                              value={stop}
+                              onChange={(e) => handleStopChange(idx, e.target.value)}
+                              className={cn('field !py-2.5', showErrors && idx < 2 && !stop.trim() && 'field-error')}
+                              aria-label={`Stop ${idx + 1}`}
+                            />
+                          </li>
+                        ))}
+                      </ol>
+                      {showErrors && !destinationOk && <FieldError>Add at least 2 stops.</FieldError>}
+                    </div>
+                  )}
+                </FormSection>
+
+                {/* ── 2 · The plan ── */}
+                <FormSection n={2} title="What's the plan?">
+                  <div className="space-y-5">
+                    <div>
+                      <div className="flex items-baseline justify-between">
+                        <label htmlFor="trip-title" className="field-label">
+                          Trip title
+                        </label>
+                        <span className="field-hint tabular-nums">
+                          {formData.title.length}/{TITLE_MAX}
+                        </span>
+                      </div>
+                      <input
+                        id="trip-title"
+                        type="text"
+                        maxLength={TITLE_MAX}
+                        placeholder="e.g. Sunrise jeep ride & chai at Nandi Hills"
+                        value={formData.title}
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        className={cn('field', showErrors && !titleOk && 'field-error')}
+                        aria-invalid={showErrors && !titleOk}
+                      />
+                      {showErrors && !titleOk && <FieldError>Give your trip a title (at least 5 characters).</FieldError>}
+                    </div>
+
+                    <div>
+                      <div className="flex items-baseline justify-between">
+                        <label htmlFor="trip-description" className="field-label">
+                          The plan
+                        </label>
+                        {!formData.description.trim() && (
+                          <button type="button" onClick={() => setFormData({ ...formData, description: PLAN_TEMPLATE })} className="text-xs font-bold text-accent-text hover:underline mb-2">
+                            Use a template
+                          </button>
+                        )}
+                      </div>
+                      <textarea
+                        id="trip-description"
+                        rows={5}
+                        maxLength={PLAN_MAX}
+                        placeholder="Timings, how you'll travel, what you'll do there, who should join…"
+                        value={formData.description}
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        className={cn('field resize-y min-h-[8rem] leading-relaxed', showErrors && !planOk && 'field-error')}
+                        aria-invalid={showErrors && !planOk}
+                      />
+                      <div className="flex justify-between mt-1.5 gap-3">
+                        {showErrors && !planOk ? <FieldError>Tell people a bit more (at least 20 characters).</FieldError> : <span className="field-hint">A clear plan gets more join requests.</span>}
+                        <span className="field-hint tabular-nums shrink-0">
+                          {formData.description.length}/{PLAN_MAX}
+                        </span>
+                      </div>
+                    </div>
                   </div>
+                </FormSection>
 
-                  <div>
-                    <label htmlFor="trip-description" className="field-label">
-                      The plan *
-                    </label>
-                    <textarea
-                      id="trip-description"
-                      required
-                      rows={4}
-                      placeholder="Timings, vehicles, who should join…"
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      className="field resize-none"
-                    />
-                  </div>
-
-                  <div className="grid sm:grid-cols-2 gap-4">
+                {/* ── 3 · When & where you meet ── */}
+                <FormSection n={3} title="When and where do you meet?">
+                  <div className="space-y-5">
                     <div>
                       <label htmlFor="trip-date" className="field-label">
-                        Date & time *
+                        Date & time
                       </label>
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {datePresets.map((d) => (
+                          <button
+                            key={d.label}
+                            type="button"
+                            aria-pressed={formData.trip_date === d.value}
+                            onClick={() => setFormData({ ...formData, trip_date: d.value })}
+                            className={cn('chip !py-1.5 !text-xs', formData.trip_date === d.value && '!bg-ink')}
+                          >
+                            <CalendarDays className="w-3.5 h-3.5" /> {d.label}
+                          </button>
+                        ))}
+                      </div>
                       <input
                         id="trip-date"
                         type="datetime-local"
-                        required
+                        min={toLocalInput(new Date())}
                         value={formData.trip_date}
                         onChange={(e) => setFormData({ ...formData, trip_date: e.target.value })}
-                        className="field"
+                        className={cn('field', showErrors && !dateOk && 'field-error')}
+                        aria-invalid={showErrors && !dateOk}
                       />
+                      {showErrors && !dateOk && <FieldError>{formData.trip_date ? 'Pick a time in the future.' : 'Pick a date and time.'}</FieldError>}
                     </div>
                     <div>
                       <label htmlFor="trip-meeting" className="field-label">
-                        Meeting point *
+                        Meeting point
                       </label>
-                      <input
-                        id="trip-meeting"
-                        type="text"
-                        required
-                        placeholder="e.g. Silk Board Metro, Gate 2"
-                        value={formData.meeting_area}
-                        onChange={(e) => setFormData({ ...formData, meeting_area: e.target.value })}
-                        className="field"
-                      />
+                      <div className="relative">
+                        <MapPin className="w-4 h-4 text-muted absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          id="trip-meeting"
+                          type="text"
+                          placeholder="e.g. Silk Board Metro, Gate 2"
+                          value={formData.meeting_area}
+                          onChange={(e) => setFormData({ ...formData, meeting_area: e.target.value })}
+                          className={cn('field !pl-10', showErrors && !meetingOk && 'field-error')}
+                          aria-invalid={showErrors && !meetingOk}
+                        />
+                      </div>
+                      {showErrors && !meetingOk && <FieldError>Where should everyone meet?</FieldError>}
                     </div>
                   </div>
+                </FormSection>
 
-                  <div className="grid sm:grid-cols-2 gap-4">
+                {/* ── 4 · Cost & seats ── */}
+                <FormSection n={4} title="Cost and group size">
+                  <div className="grid sm:grid-cols-2 gap-5">
                     <div>
                       <label htmlFor="trip-cost" className="field-label">
-                        Cost per person (₹)
+                        Cost per person
                       </label>
-                      <input
-                        id="trip-cost"
-                        type="number"
-                        min="0"
-                        step="50"
-                        value={formData.estimated_cost}
-                        onChange={(e) => setFormData({ ...formData, estimated_cost: Number(e.target.value) })}
-                        className="field"
-                      />
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-muted pointer-events-none">₹</span>
+                        <input
+                          id="trip-cost"
+                          type="number"
+                          inputMode="numeric"
+                          min="0"
+                          step="50"
+                          value={formData.estimated_cost}
+                          onChange={(e) => setFormData({ ...formData, estimated_cost: Math.max(0, Number(e.target.value)) })}
+                          className="field !pl-9 tabular-nums"
+                        />
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 mt-2.5">
+                        {COST_PRESETS.map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            aria-pressed={formData.estimated_cost === c}
+                            onClick={() => setFormData({ ...formData, estimated_cost: c })}
+                            className={cn(
+                              'px-2.5 py-1 rounded-full text-xs font-bold border transition-colors',
+                              formData.estimated_cost === c ? 'bg-ink text-sand border-ink' : 'border-line-strong text-body hover:border-ink hover:text-ink',
+                            )}
+                          >
+                            {c === 0 ? 'Free' : `₹${c.toLocaleString('en-IN')}`}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <div>
                       <label htmlFor="trip-size" className="field-label">
-                        Group size
+                        Group size <span className="font-medium text-muted">(incl. you)</span>
                       </label>
+                      <div className="field !p-1.5 flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, max_members: Math.max(2, formData.max_members - 1) })}
+                          disabled={formData.max_members <= 2}
+                          className="w-10 h-10 rounded-xl hover:bg-stone disabled:opacity-35 disabled:hover:bg-transparent flex items-center justify-center text-ink transition-colors"
+                          aria-label="Fewer people"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <input
+                          id="trip-size"
+                          type="number"
+                          inputMode="numeric"
+                          min="2"
+                          max="30"
+                          value={formData.max_members}
+                          onChange={(e) => setFormData({ ...formData, max_members: Math.max(2, Math.min(30, Number(e.target.value) || 2)) })}
+                          className="w-14 text-center bg-transparent font-bold text-lg text-ink tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, max_members: Math.min(30, formData.max_members + 1) })}
+                          disabled={formData.max_members >= 30}
+                          className="w-10 h-10 rounded-xl hover:bg-stone disabled:opacity-35 disabled:hover:bg-transparent flex items-center justify-center text-ink transition-colors"
+                          aria-label="More people"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <p className="field-hint mt-2.5">
+                        {formData.max_members - 1} {formData.max_members - 1 === 1 ? 'seat' : 'seats'} open for others
+                      </p>
+                    </div>
+                  </div>
+                </FormSection>
+
+                {/* ── 5 · Chat & safety ── */}
+                <FormSection n={5} title="Chat and safety" optional last>
+                  <div className="space-y-5">
+                    <div className="rounded-3xl bg-paper border border-line p-5">
+                      <label htmlFor="trip-chat" className="field-label !flex items-center gap-2">
+                        <MessageCircle className="w-4 h-4 text-sage-text" /> WhatsApp or Telegram invite link
+                      </label>
+                      <p className="text-xs text-muted mb-3 flex items-center gap-1.5">
+                        <Lock className="w-3 h-3" /> Only people you approve will see it. You can add it later.
+                      </p>
                       <input
-                        id="trip-size"
-                        type="number"
-                        min="2"
-                        max="30"
-                        value={formData.max_members}
-                        onChange={(e) => setFormData({ ...formData, max_members: Number(e.target.value) })}
-                        className="field"
+                        id="trip-chat"
+                        type="url"
+                        placeholder="https://chat.whatsapp.com/… or https://t.me/…"
+                        value={formData.chat_link}
+                        onChange={(e) => setFormData({ ...formData, chat_link: e.target.value })}
+                        className={cn('field', chatOk === false && 'field-error')}
+                        aria-invalid={chatOk === false}
+                      />
+                      {chatOk === false && <FieldError>Paste a full link starting with https://</FieldError>}
+                      {chatApp && (
+                        <p className="mt-2 text-xs font-bold text-sage-text flex items-center gap-1.5">
+                          <Check className="w-3.5 h-3.5" /> {chatApp} group link
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="field-label">
+                        What to bring
+                      </p>
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {GEAR_PRESETS.map((g) => {
+                          const on = gear.includes(g);
+                          return (
+                            <button
+                              key={g}
+                              type="button"
+                              aria-pressed={on}
+                              onClick={() => setGear((prev) => (prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]))}
+                              className={cn(
+                                'px-2.5 py-1 rounded-full text-xs font-bold border transition-colors flex items-center gap-1',
+                                on ? 'bg-sage-soft text-sage-text border-sage/40' : 'border-line-strong text-body hover:border-ink hover:text-ink',
+                              )}
+                            >
+                              {on ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />} {g}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <label htmlFor="trip-safety" className="field-label !mt-4">
+                        Safety notes
+                      </label>
+                      <textarea
+                        id="trip-safety"
+                        rows={2}
+                        placeholder="e.g. No drinking and riding. Stay with the group on the trail."
+                        value={formData.safety_notes}
+                        onChange={(e) => setFormData({ ...formData, safety_notes: e.target.value })}
+                        className="field resize-none"
                       />
                     </div>
                   </div>
+                </FormSection>
 
-                  <div className="rounded-3xl bg-paper border border-line p-5">
-                    <label htmlFor="trip-chat" className="field-label !flex items-center gap-2">
-                      <MessageCircle className="w-4 h-4 text-sage-text" /> WhatsApp or Telegram invite link
-                    </label>
-                    <p className="text-xs text-muted mb-3 flex items-center gap-1.5">
-                      <Lock className="w-3 h-3" /> Only people you approve will see it.
-                    </p>
-                    <input
-                      id="trip-chat"
-                      type="url"
-                      placeholder="https://chat.whatsapp.com/… or https://t.me/…"
-                      value={formData.chat_link}
-                      onChange={(e) => setFormData({ ...formData, chat_link: e.target.value })}
-                      className="field"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="trip-safety" className="field-label">
-                      Safety & gear notes
-                    </label>
-                    <input
-                      id="trip-safety"
-                      type="text"
-                      placeholder="e.g. Water bottles, trekking shoes, rain jacket"
-                      value={formData.safety_notes}
-                      onChange={(e) => setFormData({ ...formData, safety_notes: e.target.value })}
-                      className="field"
-                    />
-                  </div>
-
-                  <div className="sticky bottom-0 -mx-6 sm:-mx-8 px-6 sm:px-8 py-4 bg-sand/95 backdrop-blur border-t border-line flex gap-3 justify-end">
-                    <button type="button" onClick={() => setIsModalOpen(false)} className="btn-ghost">
-                      Cancel
-                    </button>
-                    <button type="submit" disabled={isSubmitting} className="btn-accent">
-                      <Users className="w-4 h-4" /> {isSubmitting ? 'Publishing…' : 'Publish trip'}
-                    </button>
-                  </div>
-                </form>
-              </div>
+                <div className="sticky bottom-0 z-20 -mx-6 sm:-mx-8 px-6 sm:px-8 py-4 bg-sand/95 backdrop-blur border-t border-line flex items-center gap-3">
+                  <p className="text-xs text-muted mr-auto min-w-0 hidden sm:block">
+                    {requiredDone < requiredChecks.length ? (
+                      <>
+                        <span className="font-bold text-ink tabular-nums">
+                          {requiredDone}/{requiredChecks.length}
+                        </span>{' '}
+                        required details filled
+                      </>
+                    ) : (
+                      <span className="flex items-center gap-1.5 font-bold text-sage-text">
+                        <ShieldCheck className="w-4 h-4" /> Ready to publish
+                      </span>
+                    )}
+                  </p>
+                  <button type="button" onClick={() => setIsModalOpen(false)} className="btn-ghost max-sm:flex-1">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={isSubmitting} className="btn-accent max-sm:flex-[2]">
+                    <Users className="w-4 h-4" /> {isSubmitting ? 'Publishing…' : 'Publish trip'}
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </motion.div>
         )}
