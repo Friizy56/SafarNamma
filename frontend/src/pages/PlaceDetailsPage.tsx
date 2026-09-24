@@ -36,6 +36,7 @@ import { Reveal, RevealItem } from '../components/motion/Reveal';
 import { fallbackPhoto } from '../utils/images';
 import { formatBudget, shortLocation } from '../utils/format';
 import { categoryIcon } from '../utils/categories';
+import { isOpen247 } from '../utils/hours';
 
 const formatTime = (timeStr?: string) => {
   if (!timeStr) return '';
@@ -49,6 +50,7 @@ const formatTime = (timeStr?: string) => {
 
 const formatVisitingHours = (open?: string, close?: string) => {
   if (!open && !close) return 'Hours not listed';
+  if (isOpen247(open, close)) return 'Open 24/7';
   if (open && close) {
     return `${formatTime(open)} – ${formatTime(close)}`;
   }

@@ -6,6 +6,8 @@ import type { Place } from '../types';
 import { PLACE_CATEGORIES } from '../types';
 import { ImageUploader } from '../components/ImageUploader';
 import { MenuUploader } from '../components/MenuUploader';
+import { OPEN_24_7, isOpen247 } from '../utils/hours';
+import { Open247Toggle } from '../components/ui/Open247Toggle';
 
 export const EditPlacePage = () => {
   const { id } = useParams<{ id: string }>();
@@ -43,6 +45,7 @@ export const EditPlacePage = () => {
   const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
   const [menuUrls, setMenuUrls] = useState<string[]>([]);
   const [category, setCategory] = useState<string>('');
+  const [open247, setOpen247] = useState(false);
 
   useEffect(() => {
     const fetchPlace = async () => {
@@ -55,6 +58,7 @@ export const EditPlacePage = () => {
           setGalleryUrls(data.gallery_images || []);
           setMenuUrls(data.menu_images || []);
           setCategory(data.category || '');
+          setOpen247(isOpen247(data.opening_hours, data.closing_hours));
         }
       } catch (err) {
         console.error(err);
@@ -312,35 +316,43 @@ export const EditPlacePage = () => {
             </div>
 
             <div className="space-y-4">
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label htmlFor="opening_hours" className="block text-sm font-semibold text-gray-900 flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-gray-400" /> Opening Time <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="time"
-                    id="opening_hours"
-                    name="opening_hours"
-                    defaultValue={place.opening_hours || '09:00'}
-                    className={`w-full px-4 py-3 rounded-xl border bg-white text-gray-900 placeholder:text-gray-400 font-medium ${errors.opening_hours ? 'border-rose-300 bg-rose-50' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`}
-                  />
-                  {errors.opening_hours && <p className="text-sm text-rose-500 mt-1 flex items-center gap-1"><Info className="w-4 h-4" /> {errors.opening_hours}</p>}
+              <Open247Toggle checked={open247} onChange={setOpen247} />
+              {open247 ? (
+                <>
+                  <input type="hidden" name="opening_hours" value={OPEN_24_7} />
+                  <input type="hidden" name="closing_hours" value={OPEN_24_7} />
+                </>
+              ) : (
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="opening_hours" className="block text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-gray-400" /> Opening Time <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="time"
+                      id="opening_hours"
+                      name="opening_hours"
+                      defaultValue={isOpen247(place.opening_hours) ? '09:00' : place.opening_hours || '09:00'}
+                      className={`w-full px-4 py-3 rounded-xl border bg-white text-gray-900 placeholder:text-gray-400 font-medium ${errors.opening_hours ? 'border-rose-300 bg-rose-50' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`}
+                    />
+                    {errors.opening_hours && <p className="text-sm text-rose-500 mt-1 flex items-center gap-1"><Info className="w-4 h-4" /> {errors.opening_hours}</p>}
+                  </div>
+  
+                  <div className="space-y-2">
+                    <label htmlFor="closing_hours" className="block text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-gray-400" /> Closing Time <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="time"
+                      id="closing_hours"
+                      name="closing_hours"
+                      defaultValue={isOpen247(place.closing_hours) ? '21:00' : place.closing_hours || '21:00'}
+                      className={`w-full px-4 py-3 rounded-xl border bg-white text-gray-900 placeholder:text-gray-400 font-medium ${errors.closing_hours ? 'border-rose-300 bg-rose-50' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`}
+                    />
+                    {errors.closing_hours && <p className="text-sm text-rose-500 mt-1 flex items-center gap-1"><Info className="w-4 h-4" /> {errors.closing_hours}</p>}
+                  </div>
                 </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="closing_hours" className="block text-sm font-semibold text-gray-900 flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-gray-400" /> Closing Time <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="time"
-                    id="closing_hours"
-                    name="closing_hours"
-                    defaultValue={place.closing_hours || '21:00'}
-                    className={`w-full px-4 py-3 rounded-xl border bg-white text-gray-900 placeholder:text-gray-400 font-medium ${errors.closing_hours ? 'border-rose-300 bg-rose-50' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all`}
-                  />
-                  {errors.closing_hours && <p className="text-sm text-rose-500 mt-1 flex items-center gap-1"><Info className="w-4 h-4" /> {errors.closing_hours}</p>}
-                </div>
-              </div>
+              )}
 
               <div className="space-y-2">
                 <label htmlFor="transport_options" className="block text-sm font-semibold text-gray-900 flex items-center gap-1.5">

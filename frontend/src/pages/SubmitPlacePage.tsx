@@ -25,6 +25,8 @@ import { PLACE_CATEGORIES } from '../types';
 import { categoryIcon } from '../utils/categories';
 import { photoProps } from '../utils/images';
 import { cn } from '../utils/cn';
+import { OPEN_24_7, isOpen247 } from '../utils/hours';
+import { Open247Toggle } from '../components/ui/Open247Toggle';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -139,6 +141,7 @@ export const SubmitPlacePage = () => {
     }
   }, [form.category]);
 
+  const open247 = isOpen247(form.opening_hours, form.closing_hours);
   const requiredDone = REQUIRED_STEPS.every((s) => s.done(form));
   const doneCount = REQUIRED_STEPS.filter((s) => s.done(form)).length;
 
@@ -600,16 +603,22 @@ export const SubmitPlacePage = () => {
 
                                       {x.key === 'practical' && (
                                         <div className="space-y-4">
-                                          <div className="grid sm:grid-cols-2 gap-4">
-                                            <div>
-                                              <label htmlFor="opening_hours" className="field-label">Opens at</label>
-                                              <input id="opening_hours" type="time" value={form.opening_hours} onChange={(e) => set('opening_hours', e.target.value)} className="field" />
+                                          <Open247Toggle
+                                            checked={open247}
+                                            onChange={(on) => setForm((f) => ({ ...f, opening_hours: on ? OPEN_24_7 : '', closing_hours: on ? OPEN_24_7 : '' }))}
+                                          />
+                                          {!open247 && (
+                                            <div className="grid sm:grid-cols-2 gap-4">
+                                              <div>
+                                                <label htmlFor="opening_hours" className="field-label">Opens at</label>
+                                                <input id="opening_hours" type="time" value={form.opening_hours} onChange={(e) => set('opening_hours', e.target.value)} className="field" />
+                                              </div>
+                                              <div>
+                                                <label htmlFor="closing_hours" className="field-label">Closes at</label>
+                                                <input id="closing_hours" type="time" value={form.closing_hours} onChange={(e) => set('closing_hours', e.target.value)} className="field" />
+                                              </div>
                                             </div>
-                                            <div>
-                                              <label htmlFor="closing_hours" className="field-label">Closes at</label>
-                                              <input id="closing_hours" type="time" value={form.closing_hours} onChange={(e) => set('closing_hours', e.target.value)} className="field" />
-                                            </div>
-                                          </div>
+                                          )}
                                           <div>
                                             <label htmlFor="transport_options" className="field-label">How to get there</label>
                                             <input

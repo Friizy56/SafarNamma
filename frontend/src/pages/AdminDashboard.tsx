@@ -29,6 +29,8 @@ import { ImageUploader } from '../components/ImageUploader';
 import { MenuUploader } from '../components/MenuUploader';
 import { setScrollLocked } from '../hooks/useLenis';
 import { Link } from 'react-router-dom';
+import { OPEN_24_7, isOpen247 } from '../utils/hours';
+import { Open247Toggle } from '../components/ui/Open247Toggle';
 
 export const AdminDashboard = () => {
   // Navigation Tab: 'submissions' | 'weekend'
@@ -843,34 +845,43 @@ export const AdminDashboard = () => {
               <div className="pt-2 border-t border-gray-100">
                 <p className="text-xs font-bold text-[#1a4731] uppercase tracking-wider mb-3">Practical Details (Compulsory for Admin)</p>
                 <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-[#1a4731]" />
-                        Opening Time <span className="text-rose-500">*</span>
-                      </label>
-                      <input 
-                        type="time"
-                        value={curationForm.opening_hours}
-                        onChange={(e) => setCurationForm({ ...curationForm, opening_hours: e.target.value })}
-                        className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none"
-                        required
-                      />
+                  <Open247Toggle
+                    id="curation-open-24-7"
+                    checked={isOpen247(curationForm.opening_hours, curationForm.closing_hours)}
+                    onChange={(on) =>
+                      setCurationForm({ ...curationForm, opening_hours: on ? OPEN_24_7 : '09:00', closing_hours: on ? OPEN_24_7 : '21:00' })
+                    }
+                  />
+                  {!isOpen247(curationForm.opening_hours, curationForm.closing_hours) && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-[#1a4731]" />
+                          Opening Time <span className="text-rose-500">*</span>
+                        </label>
+                        <input 
+                          type="time"
+                          value={curationForm.opening_hours}
+                          onChange={(e) => setCurationForm({ ...curationForm, opening_hours: e.target.value })}
+                          className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-[#1a4731]" />
+                          Closing Time <span className="text-rose-500">*</span>
+                        </label>
+                        <input 
+                          type="time"
+                          value={curationForm.closing_hours}
+                          onChange={(e) => setCurationForm({ ...curationForm, closing_hours: e.target.value })}
+                          className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none"
+                          required
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-[#1a4731]" />
-                        Closing Time <span className="text-rose-500">*</span>
-                      </label>
-                      <input 
-                        type="time"
-                        value={curationForm.closing_hours}
-                        onChange={(e) => setCurationForm({ ...curationForm, closing_hours: e.target.value })}
-                        className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-[#1a4731] focus:bg-white outline-none"
-                        required
-                      />
-                    </div>
-                  </div>
+                  )}
 
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
