@@ -56,7 +56,7 @@ export const AdminDashboard = () => {
   const [curationForm, setCurationForm] = useState({
     category: 'Nature',
     duration: '2-3 Hours',
-    best_season: 'October - March (Winter)',
+    best_season: 'All Year Round',
     description: '',
     opening_hours: '09:00',
     closing_hours: '21:00',
@@ -115,7 +115,7 @@ export const AdminDashboard = () => {
     setCurationForm({
       category: place.category || 'Nature',
       duration: place.duration || '2-3 Hours',
-      best_season: place.best_season || 'October - March (Winter)',
+      best_season: place.best_season || 'All Year Round',
       description: place.description || '',
       opening_hours: place.opening_hours || '09:00',
       closing_hours: place.closing_hours || '21:00',
