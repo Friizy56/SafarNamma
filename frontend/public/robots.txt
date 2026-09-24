@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://safarnamma.vercel.app/sitemap.xml
