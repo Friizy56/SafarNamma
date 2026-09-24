@@ -31,8 +31,16 @@ export const uploadImageToCloudinary = async (file: File): Promise<string> => {
   }
 
   // 2. Prepare payload
+  // Give every upload a unique file name. The upload preset names assets after the file, so a
+  // second "wonderla.png" would otherwise resolve to the first one and the old photo comes back.
+  const dot = file.name.lastIndexOf('.');
+  const base = (dot > 0 ? file.name.slice(0, dot) : file.name).replace(/[^\w-]+/g, '-').slice(0, 40) || 'photo';
+  const ext = dot > 0 ? file.name.slice(dot) : '';
+  const unique = `${base}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}${ext}`;
+  const uploadFile = new File([file], unique, { type: file.type });
+
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append('file', uploadFile);
   formData.append('upload_preset', UPLOAD_PRESET);
 
   // 3. Send direct POST to Cloudinary endpoint
