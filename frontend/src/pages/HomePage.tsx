@@ -248,7 +248,11 @@ const Hero: React.FC<{ placeCount: number }> = ({ placeCount }) => {
             <div className="bg-paper/95 backdrop-blur rounded-2xl border border-line card-shadow-hover p-4 pr-6 animate-float">
               <p className="text-label text-muted mb-1">Mapped so far</p>
               <p className="font-display text-4xl text-ink leading-none">
-                {placeCount ? <Counter value={placeCount} /> : '—'}
+                {placeCount ? (
+                  <Counter value={placeCount} />
+                ) : (
+                  <span className="inline-block w-14 h-9 align-middle rounded-md bg-line/70 animate-pulse" aria-label="Loading" />
+                )}
               </p>
               <p className="text-xs text-muted mt-1.5">verified places around Bengaluru</p>
             </div>
@@ -607,23 +611,42 @@ const HowItWorks: React.FC = () => {
 /* ════════════════════════════════════════
    HOME PAGE
    ════════════════════════════════════════ */
+const PLACE_COUNT_KEY = 'home:placeCount';
+
 export const HomePage: React.FC = () => {
   const [featuredPlaces, setFeaturedPlaces] = useState<Place[]>([]);
   const [activeGroups, setActiveGroups] = useState<Group[]>([]);
   const [allPlaces, setAllPlaces] = useState<Place[]>([]);
+  // Last known count, so the hero card has a number before the places request returns
+  const [cachedCount, setCachedCount] = useState<number>(() => {
+    try {
+      return Number(localStorage.getItem(PLACE_COUNT_KEY)) || 0;
+    } catch {
+      return 0;
+    }
+  });
 
   useEffect(() => {
-    const load = async () => {
-      // allSettled: one failing request shouldn't blank the other sections
-      const [featured, groups, places] = await Promise.allSettled([placesApi.getPopularWeekend(), groupsApi.getGroups(), placesApi.getPlaces()]);
-      if (featured.status === 'fulfilled') setFeaturedPlaces(featured.value || []);
-      if (groups.status === 'fulfilled') setActiveGroups((groups.value || []).slice(0, 3));
-      if (places.status === 'fulfilled') setAllPlaces(places.value || []);
-      [featured, groups, places].forEach((r) => {
-        if (r.status === 'rejected') console.error('Failed to load home data:', r.reason);
-      });
-    };
-    load();
+    // Each section fills in as soon as its own request lands; one failing
+    // (or slow) request shouldn't hold back or blank the others
+    const onError = (err: unknown) => console.error('Failed to load home data:', err);
+    placesApi.getPopularWeekend().then((v) => setFeaturedPlaces(v || [])).catch(onError);
+    groupsApi.getGroups().then((v) => setActiveGroups((v || []).slice(0, 3))).catch(onError);
+    placesApi
+      .getPlaces()
+      .then((v) => {
+        const places = v || [];
+        setAllPlaces(places);
+        if (places.length) {
+          setCachedCount(places.length);
+          try {
+            localStorage.setItem(PLACE_COUNT_KEY, String(places.length));
+          } catch {
+            /* storage unavailable */
+          }
+        }
+      })
+      .catch(onError);
   }, []);
 
   const latestFinds = useMemo(
@@ -639,7 +662,7 @@ export const HomePage: React.FC = () => {
 
   return (
     <div className="flex flex-col w-full bg-sand min-h-screen">
-      <Hero placeCount={allPlaces.length} />
+      <Hero placeCount={allPlaces.length || cachedCount} />
       <NameMarquee names={marqueeNames} />
       {allPlaces.length > 0 && <DiscoveryCounter count={allPlaces.length} latest={latestFinds} />}
       <FeaturedPlaces places={featuredPlaces} total={allPlaces.length} />
