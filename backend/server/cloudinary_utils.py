@@ -173,16 +173,18 @@ def delete_destination_cloudinary_assets(destination: Any) -> List[dict]:
     if getattr(destination, "image_url", None):
         urls_to_delete.append(destination.image_url)
 
-    # 2. Gallery photos
-    gallery_val = getattr(destination, "gallery_images", None)
-    if gallery_val:
-        if isinstance(gallery_val, list):
-            for img in gallery_val:
+    # 2. Gallery photos + 3. Menu photos
+    for field_name in ("gallery_images", "menu_images"):
+        field_val = getattr(destination, field_name, None)
+        if not field_val:
+            continue
+        if isinstance(field_val, list):
+            for img in field_val:
                 if isinstance(img, str):
                     urls_to_delete.append(img)
-        elif isinstance(gallery_val, str):
+        elif isinstance(field_val, str):
             try:
-                parsed = json.loads(gallery_val)
+                parsed = json.loads(field_val)
                 if isinstance(parsed, list):
                     for img in parsed:
                         if isinstance(img, str):
@@ -191,7 +193,7 @@ def delete_destination_cloudinary_assets(destination: Any) -> List[dict]:
                     urls_to_delete.append(parsed)
             except Exception:
                 # Handle comma-separated or plain text strings
-                for item in gallery_val.split(","):
+                for item in field_val.split(","):
                     cleaned = item.strip().strip("\"'[]")
                     if cleaned.startswith("http"):
                         urls_to_delete.append(cleaned)

@@ -5,6 +5,7 @@ import { Link, useParams } from 'react-router-dom';
 import type { Place } from '../types';
 import { PLACE_CATEGORIES } from '../types';
 import { ImageUploader } from '../components/ImageUploader';
+import { MenuUploader } from '../components/MenuUploader';
 
 export const EditPlacePage = () => {
   const { id } = useParams<{ id: string }>();
@@ -40,6 +41,8 @@ export const EditPlacePage = () => {
 
   const [imageUrl, setImageUrl] = useState<string>('');
   const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
+  const [menuUrls, setMenuUrls] = useState<string[]>([]);
+  const [category, setCategory] = useState<string>('');
 
   useEffect(() => {
     const fetchPlace = async () => {
@@ -50,6 +53,8 @@ export const EditPlacePage = () => {
           setPlace(data);
           setImageUrl(data.image_url || '');
           setGalleryUrls(data.gallery_images || []);
+          setMenuUrls(data.menu_images || []);
+          setCategory(data.category || '');
         }
       } catch (err) {
         console.error(err);
@@ -82,6 +87,7 @@ export const EditPlacePage = () => {
         budget_tier: String(data.estimated_cost),
         image_url: imageUrl || place?.image_url || 'https://images.unsplash.com/photo-1506461883276-594543d04e12',
         gallery_images: galleryUrls,
+        menu_images: data.category === 'Cafes & Restaurants' ? menuUrls : [],
         map_link: data.map_link,
         category: data.category,
         opening_hours: data.opening_hours,
@@ -252,6 +258,7 @@ export const EditPlacePage = () => {
                     name="category"
                     className={`w-full pl-10 pr-4 py-3 rounded-xl border bg-white text-gray-900 font-medium cursor-pointer ${errors.category ? 'border-rose-300 bg-rose-50 focus:ring-rose-200 focus:border-rose-500' : 'border-gray-200 focus:ring-[#f97316]/20 focus:border-[#f97316]'} outline-none focus:ring-4 transition-all appearance-none`}
                     defaultValue={place.category}
+                    onChange={(e) => setCategory(e.target.value)}
                   >
                     <option value="" className="text-gray-400 bg-white">Select a category</option>
                     {PLACE_CATEGORIES.map((cat) => (
@@ -277,6 +284,10 @@ export const EditPlacePage = () => {
               onGalleryChange={setGalleryUrls}
               maxGalleryPhotos={5}
             />
+
+            {category === 'Cafes & Restaurants' && (
+              <MenuUploader menuUrls={menuUrls} onMenuChange={setMenuUrls} maxMenuPhotos={5} />
+            )}
 
             <div className="space-y-2">
               <label htmlFor="map_link" className="block text-sm font-semibold text-gray-900">Google Map Link</label>

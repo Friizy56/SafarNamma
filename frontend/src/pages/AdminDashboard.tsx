@@ -26,6 +26,8 @@ import {
   SlidersHorizontal
 } from 'lucide-react';
 import { ImageUploader } from '../components/ImageUploader';
+import { MenuUploader } from '../components/MenuUploader';
+import { setScrollLocked } from '../hooks/useLenis';
 import { Link } from 'react-router-dom';
 
 export const AdminDashboard = () => {
@@ -59,7 +61,8 @@ export const AdminDashboard = () => {
     transport_options: 'Local cabs and buses available',
     nearby_facilities: 'Basic eateries, Restrooms',
     image_url: '',
-    gallery_images: [] as string[]
+    gallery_images: [] as string[],
+    menu_images: [] as string[]
   });
   const [isPublishing, setIsPublishing] = useState(false);
 
@@ -97,6 +100,13 @@ export const AdminDashboard = () => {
     fetchApprovedPlaces();
   }, []);
 
+  // Lock page scroll while the curation modal is open, so wheel/touch scrolling
+  // stays inside the modal instead of the Lenis-driven page behind it.
+  useEffect(() => {
+    setScrollLocked(Boolean(selectedForApproval));
+    return () => setScrollLocked(false);
+  }, [selectedForApproval]);
+
   // Open modal for curation
   const openApprovalModal = (place: Place) => {
     setSelectedForApproval(place);
@@ -110,7 +120,8 @@ export const AdminDashboard = () => {
       transport_options: place.transport_options || 'Local cabs and buses available',
       nearby_facilities: place.nearby_facilities || 'Basic eateries, Restrooms',
       image_url: place.image_url || '',
-      gallery_images: place.gallery_images || []
+      gallery_images: place.gallery_images || [],
+      menu_images: place.menu_images || []
     });
   };
 
@@ -686,8 +697,8 @@ export const AdminDashboard = () => {
       {/* Editorial Curation Modal */}
       {selectedForApproval && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 relative max-h-[92vh] overflow-y-auto">
-            <button 
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 relative max-h-[92vh] overflow-y-auto" data-lenis-prevent>
+            <button
               onClick={() => setSelectedForApproval(null)}
               className="absolute top-5 right-5 p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100"
             >
@@ -742,6 +753,16 @@ export const AdminDashboard = () => {
                   onGalleryChange={(urls) => setCurationForm((prev) => ({ ...prev, gallery_images: urls }))}
                   maxGalleryPhotos={5}
                 />
+
+                {curationForm.category === 'Cafes & Restaurants' && (
+                  <div className="pt-3 border-t border-gray-200">
+                    <MenuUploader
+                      menuUrls={curationForm.menu_images}
+                      onMenuChange={(urls) => setCurationForm((prev) => ({ ...prev, menu_images: urls }))}
+                      maxMenuPhotos={5}
+                    />
+                  </div>
+                )}
 
                 {/* Direct URL Alternative Input */}
                 <div className="pt-2 border-t border-gray-200">

@@ -20,12 +20,14 @@ import {
   Clock,
   Users,
   Share2,
+  UtensilsCrossed,
 } from 'lucide-react';
 import type { Place, Review } from '../types';
 import { placesApi, reviewApi } from '../api/client';
 import { useFavorites } from '../context/FavoritesContext';
 import { useAuth } from '../context/AuthContext';
 import { PhotoStrip, PhotoLightbox } from '../components/places/PlaceGallery';
+import { MenuFlipbook } from '../components/places/MenuFlipbook';
 import { BoardingPass } from '../components/places/BoardingPass';
 import { PlaceCard } from '../components/places/PlaceCard';
 import { DetailHero, FactsCard } from '../components/detail/DetailHero';
@@ -74,6 +76,7 @@ export const PlaceDetailsPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [related, setRelated] = useState<Place[]>([]);
   const [shareNote, setShareNote] = useState('');
 
@@ -237,6 +240,11 @@ export const PlaceDetailsPage = () => {
     return list;
   }, [place, fallback]);
 
+  const menuPages = useMemo(() => {
+    if (!place?.menu_images) return [];
+    return place.menu_images.filter((img): img is string => Boolean(img) && typeof img === 'string');
+  }, [place]);
+
   const openPhoto = (i: number) => {
     setSelectedImageIndex(i);
     setIsLightboxOpen(true);
@@ -383,6 +391,11 @@ export const PlaceDetailsPage = () => {
             <button onClick={handleShare} className="btn-ghost" aria-live="polite">
               <Share2 className="w-4 h-4" /> {shareNote || 'Share'}
             </button>
+            {place.category === 'Cafes & Restaurants' && menuPages.length > 0 && (
+              <button onClick={() => setIsMenuOpen(true)} className="btn-ghost">
+                <UtensilsCrossed className="w-4 h-4" /> Open Menu
+              </button>
+            )}
           </>
         }
       />
@@ -668,6 +681,10 @@ export const PlaceDetailsPage = () => {
           name={place.name}
           fallback={fallback}
         />
+      )}
+
+      {isMenuOpen && menuPages.length > 0 && (
+        <MenuFlipbook pages={menuPages} name={place.name} onClose={() => setIsMenuOpen(false)} />
       )}
     </div>
   );

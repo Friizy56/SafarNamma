@@ -258,6 +258,7 @@ export const submissionsApi = {
       nearby_facilities: string;
       image_url?: string;
       gallery_images?: string[];
+      menu_images?: string[];
     }
   ): Promise<boolean> => {
     try {
