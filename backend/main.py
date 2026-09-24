@@ -382,7 +382,7 @@ def create_travel_group(group: schemas.TravelGroupCreate, db: Session = Depends(
             )
 
     # Rate limit: An organizer can create a maximum of 2 groups per day
-    start_of_today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    start_of_today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     groups_today = db.query(models.TravelGroup).filter(
         models.TravelGroup.organizer_email.ilike(group.organizer_email),
         models.TravelGroup.created_at >= start_of_today
@@ -423,7 +423,7 @@ def create_travel_group(group: schemas.TravelGroupCreate, db: Session = Depends(
 @app.get("/api/groups", response_model=List[schemas.TravelGroupResponse])
 def get_travel_groups(db: Session = Depends(get_db)):
     # Auto-expiration: groups disappear once their visiting date and time has passed
-    now = datetime.now()
+    now = datetime.utcnow()
     return db.query(models.TravelGroup).filter(
         models.TravelGroup.trip_date > now
     ).order_by(models.TravelGroup.created_at.desc()).all()
@@ -444,7 +444,7 @@ def delete_travel_group(group_id: int, db: Session = Depends(get_db), user: Curr
         )
 
     # Cooldown verification: Can only be deleted after 2 hours of creation
-    time_elapsed = datetime.now() - group.created_at
+    time_elapsed = datetime.utcnow() - group.created_at
     min_cooldown = timedelta(hours=2)
     if time_elapsed < min_cooldown:
         remaining_seconds = (min_cooldown - time_elapsed).total_seconds()
@@ -503,6 +503,9 @@ def request_to_join(group_id: int, request_data: schemas.GroupRequestCreate, db:
     
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
+
+    if group.trip_date <= datetime.utcnow():
+        raise HTTPException(status_code=400, detail="This trip has already happened.")
 
     if group.current_members >= group.max_members:
         raise HTTPException(status_code=400, detail="This group is already full!")

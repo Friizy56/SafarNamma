@@ -1,7 +1,18 @@
 from typing import Optional , List , Annotated
-from pydantic import BaseModel , Field , ConfigDict , field_validator
-from datetime import datetime
+from pydantic import BaseModel , Field , ConfigDict , field_validator , AfterValidator
+from datetime import datetime , timezone
 from SQLite.models import VALID_CATEGORIES
+
+# The database stores naive UTC timestamps. Responses tag them as UTC so browsers
+# convert to the viewer's local time; inputs are normalised back to naive UTC.
+def _to_aware_utc(v: datetime) -> datetime:
+    return v.replace(tzinfo=timezone.utc) if v.tzinfo is None else v.astimezone(timezone.utc)
+
+def _to_naive_utc(v: datetime) -> datetime:
+    return v if v.tzinfo is None else v.astimezone(timezone.utc).replace(tzinfo=None)
+
+UtcDatetime = Annotated[datetime, AfterValidator(_to_aware_utc)]
+NaiveUtcDatetime = Annotated[datetime, AfterValidator(_to_naive_utc)]
 
 class DestinationBase(BaseModel) :
 
@@ -84,7 +95,7 @@ class ReviewResponse(ReviewCreate):
 
     id : int 
     user_id : int 
-    created_at : datetime 
+    created_at : UtcDatetime 
     model_config = ConfigDict(from_attributes = True)
 
 class UserResponse(BaseModel):
@@ -95,7 +106,7 @@ class UserResponse(BaseModel):
     avatar : Optional[str] = None 
     role : str 
     bio : Optional[str] = None
-    created_at : Optional[datetime] = None
+    created_at : Optional[UtcDatetime] = None
     model_config = ConfigDict(from_attributes = True)
 
 class UserUpdate(BaseModel):
@@ -122,7 +133,7 @@ class TravelGroupCreate(BaseModel):
     organizer_email : Optional[str] = None
     title : str 
     description : str 
-    trip_date : datetime 
+    trip_date : NaiveUtcDatetime 
     meeting_area : str 
     estimated_cost : float = 0.0 
     max_members : int =  6
@@ -138,7 +149,7 @@ class TravelGroupResponse(BaseModel):
     organizer_email : str 
     title : str 
     description : str 
-    trip_date : datetime 
+    trip_date : UtcDatetime 
     meeting_area : str 
     estimated_cost : float 
     max_members : int 
@@ -146,7 +157,7 @@ class TravelGroupResponse(BaseModel):
     chat_link : Optional[str] = None 
     status : str 
     safety_notes : Optional[str] = None 
-    created_at :datetime 
+    created_at :UtcDatetime 
     user_request_status : Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
@@ -163,7 +174,7 @@ class GroupRequestResponse(BaseModel):
     user_name: str
     user_email: str
     status: str
-    created_at: datetime
+    created_at: UtcDatetime
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -175,7 +186,7 @@ class NotificationResponse(BaseModel):
     message: str
     link: Optional[str] = None
     is_read: bool
-    created_at: datetime
+    created_at: UtcDatetime
     model_config = ConfigDict(from_attributes=True)
 
 

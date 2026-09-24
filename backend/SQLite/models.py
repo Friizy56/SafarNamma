@@ -115,7 +115,7 @@ class TravelGroup(Base):
     
     status = Column(String, default="open")  # 'open', 'full', 'cancelled'
     safety_notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.now)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class GroupRequest(Base):
@@ -128,7 +128,7 @@ class GroupRequest(Base):
     user_email = Column(String, nullable=False)
     user_name = Column(String, nullable=False)
     status = Column(String, default="pending")  # 'pending', 'approved', 'rejected'
-    created_at = Column(DateTime, default=datetime.now)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class Notification(Base):
@@ -142,4 +142,4 @@ class Notification(Base):
     message = Column(Text, nullable=False)
     link = Column(String, nullable=True)
     is_read = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.now)
+    created_at = Column(DateTime, default=datetime.utcnow)
