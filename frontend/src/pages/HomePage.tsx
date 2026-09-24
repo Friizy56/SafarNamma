@@ -94,6 +94,20 @@ const Hero: React.FC<{ placeCount: number }> = ({ placeCount }) => {
   const smallY = useTransform(scrollYProgress, [0, 1], ['0%', '-34%']);
   const cardY = useTransform(scrollYProgress, [0, 1], ['0%', '-60%']);
   const textY = useTransform(scrollYProgress, [0, 1], ['0%', '14%']);
+
+  // The route rides on the photos: its start pin moves with the small photo, its end pin with the
+  // big one (each at that photo's parallax speed), and the line stretches between them.
+  // Offsets are in the SVG's 600×660 units: photo height × its drift % (big: 80% × 12%, small: 52% × 34%).
+  const BIG_DRIFT = -0.8 * 0.12 * 660;
+  const SMALL_DRIFT = -0.52 * 0.34 * 660;
+  const startPinY = useTransform(scrollYProgress, (p) => (reduced ? 0 : p * SMALL_DRIFT));
+  const endPinY = useTransform(scrollYProgress, (p) => (reduced ? 0 : p * BIG_DRIFT));
+  const routePath = useTransform(scrollYProgress, (p) => {
+    const s = reduced ? 0 : p * SMALL_DRIFT;
+    const b = reduced ? 0 : p * BIG_DRIFT;
+    const m = (s + b) / 2;
+    return `M 70 ${600 + s} C 140 ${470 + s}, 60 ${360 + m}, 190 ${300 + m} S 430 ${250 + b}, 470 ${120 + b}`;
+  });
   const textOpacity = useTransform(scrollYProgress, [0, 0.7], [1, 0.2]);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -180,9 +194,10 @@ const Hero: React.FC<{ placeCount: number }> = ({ placeCount }) => {
         {/* Collage */}
         <div className="lg:col-span-6 relative h-[440px] sm:h-[560px] lg:h-[660px]">
           {/* Route drawing between the photos */}
-          <svg aria-hidden viewBox="0 0 600 660" className="absolute inset-0 w-full h-full z-20 pointer-events-none overflow-visible">
+          <svg aria-hidden viewBox="0 0 600 660" preserveAspectRatio="none" className="absolute inset-0 w-full h-full z-20 pointer-events-none overflow-visible">
             <motion.path
-              d="M 70 600 C 140 470, 60 360, 190 300 S 430 250, 470 120"
+              d={routePath}
+              vectorEffect="non-scaling-stroke"
               fill="none"
               stroke="var(--color-accent)"
               strokeWidth="2.5"
@@ -196,9 +211,11 @@ const Hero: React.FC<{ placeCount: number }> = ({ placeCount }) => {
               [70, 600],
               [470, 120],
             ].map(([x, y], i) => (
-              <motion.g key={i} initial={reduced ? false : { scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5, delay: 1 + i * 2, ease: EASE }} style={{ transformOrigin: `${x}px ${y}px` }}>
-                <circle cx={x} cy={y} r="13" fill="var(--color-accent)" opacity="0.18" />
-                <circle cx={x} cy={y} r="6" fill="var(--color-accent)" stroke="var(--color-sand)" strokeWidth="2.5" />
+              <motion.g key={i} style={{ y: i === 0 ? startPinY : endPinY }}>
+                <motion.g initial={reduced ? false : { scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5, delay: 1 + i * 2, ease: EASE }} style={{ transformOrigin: `${x}px ${y}px` }}>
+                  <circle cx={x} cy={y} r="13" fill="var(--color-accent)" opacity="0.18" />
+                  <circle cx={x} cy={y} r="6" fill="var(--color-accent)" stroke="var(--color-sand)" strokeWidth="2.5" />
+                </motion.g>
               </motion.g>
             ))}
           </svg>
