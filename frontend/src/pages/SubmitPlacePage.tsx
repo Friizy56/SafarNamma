@@ -13,10 +13,12 @@ import {
   MapPinned,
   Navigation,
   Send,
+  UtensilsCrossed,
 } from 'lucide-react';
 import { submissionsApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { ImageUploader } from '../components/ImageUploader';
+import { MenuUploader } from '../components/MenuUploader';
 import { PlaceCard } from '../components/places/PlaceCard';
 import { SplitHeading } from '../components/motion/SplitHeading';
 import { PLACE_CATEGORIES } from '../types';
@@ -48,7 +50,7 @@ const COST_PRESETS = [
   { label: '₹1,000', value: '1000' },
 ];
 
-type ExtraKey = 'description' | 'photos' | 'map' | 'practical';
+type ExtraKey = 'description' | 'photos' | 'menu' | 'map' | 'practical';
 
 const isValidCost = (v: string) => v.trim() !== '' && !Number.isNaN(Number(v)) && Number(v) >= 0;
 
@@ -98,6 +100,7 @@ export const SubmitPlacePage = () => {
   const [isSuccess, setIsSuccess] = useState(false);
   const [imageUrl, setImageUrl] = useState<string>('');
   const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
+  const [menuUrls, setMenuUrls] = useState<string[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [openExtra, setOpenExtra] = useState<ExtraKey | null>(null);
@@ -128,6 +131,13 @@ export const SubmitPlacePage = () => {
   useEffect(() => {
     setRevealed((r) => Math.max(r, Math.min(REQUIRED_STEPS.length, answeredInOrder + 1)));
   }, [answeredInOrder]);
+
+  useEffect(() => {
+    if (form.category !== 'Cafes & Restaurants') {
+      setMenuUrls([]);
+      setOpenExtra((k) => (k === 'menu' ? null : k));
+    }
+  }, [form.category]);
 
   const requiredDone = REQUIRED_STEPS.every((s) => s.done(form));
   const doneCount = REQUIRED_STEPS.filter((s) => s.done(form)).length;
@@ -181,6 +191,7 @@ export const SubmitPlacePage = () => {
         budget_tier: String(form.estimated_cost),
         image_url: imageUrl || 'https://images.unsplash.com/photo-1506461883276-594543d04e12',
         gallery_images: galleryUrls,
+        menu_images: form.category === 'Cafes & Restaurants' ? menuUrls : [],
         map_link: form.map_link,
         category: form.category,
         opening_hours: form.opening_hours.trim() || null,
@@ -209,6 +220,7 @@ export const SubmitPlacePage = () => {
     setForm(EMPTY_FORM);
     setImageUrl('');
     setGalleryUrls([]);
+    setMenuUrls([]);
     setErrors({});
     setSubmitError(null);
     setRevealed(1);
@@ -245,6 +257,9 @@ export const SubmitPlacePage = () => {
   const extras: { key: ExtraKey; icon: typeof FileText; title: string; blurb: string; filled: boolean }[] = [
     { key: 'description', icon: FileText, title: 'Describe it', blurb: 'What makes it special, tips, cautions', filled: Boolean(form.description.trim()) },
     { key: 'photos', icon: ImagePlus, title: 'Add photos', blurb: 'A cover shot and up to five more', filled: Boolean(imageUrl || galleryUrls.length) },
+    ...(form.category === 'Cafes & Restaurants'
+      ? [{ key: 'menu' as ExtraKey, icon: UtensilsCrossed, title: 'Add menu', blurb: 'Up to five photos of the menu', filled: Boolean(menuUrls.length) }]
+      : []),
     { key: 'map', icon: MapPinned, title: 'Pin on Google Maps', blurb: 'So people can navigate straight there', filled: Boolean(form.map_link.trim()) },
     {
       key: 'practical',
@@ -557,6 +572,10 @@ export const SubmitPlacePage = () => {
                                           onGalleryChange={setGalleryUrls}
                                           maxGalleryPhotos={5}
                                         />
+                                      )}
+
+                                      {x.key === 'menu' && (
+                                        <MenuUploader menuUrls={menuUrls} onMenuChange={setMenuUrls} maxMenuPhotos={5} />
                                       )}
 
                                       {x.key === 'map' && (

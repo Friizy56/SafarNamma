@@ -39,6 +39,7 @@ export interface Place {
   transport_options?: string;
   nearby_facilities?: string;
   gallery_images?: string[];
+  menu_images?: string[];
   is_popular_weekend?: boolean;
 }
 

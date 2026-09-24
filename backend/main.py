@@ -165,6 +165,7 @@ def create_destination(destination : schemas.DestinationCreate , db : Session = 
         transport_options = destination.transport_options,
         nearby_facilities = destination.nearby_facilities,
         gallery_images = json.dumps(destination.gallery_images) if destination.gallery_images else None,
+        menu_images = json.dumps(destination.menu_images) if destination.menu_images else None,
         is_approved = bool(destination.is_approved) if destination.is_approved is not None else False,
         submitted_by_email = destination.submitted_by_email,
         submission_status = destination.submission_status if destination.submission_status else ("approved" if destination.is_approved else "pending")
@@ -295,7 +296,9 @@ def edit_destination(destination_id : int , destination_update: schemas.Destinat
     if destination_update.nearby_facilities is not None:
         dest.nearby_facilities = destination_update.nearby_facilities 
     if destination_update.gallery_images is not None:
-        dest.gallery_images = json.dumps(destination_update.gallery_images) if destination_update.gallery_images else None 
+        dest.gallery_images = json.dumps(destination_update.gallery_images) if destination_update.gallery_images else None
+    if destination_update.menu_images is not None:
+        dest.menu_images = json.dumps(destination_update.menu_images) if destination_update.menu_images else None
 
     db.commit()
     db.refresh(dest)
@@ -716,6 +719,9 @@ def approve_submission(destination_id: int, payload: schemas.AdminApprovalPayloa
 
     if payload.gallery_images is not None:
         dest.gallery_images = json.dumps(payload.gallery_images) if payload.gallery_images else None
+
+    if payload.menu_images is not None:
+        dest.menu_images = json.dumps(payload.menu_images) if payload.menu_images else None
 
     # Save the mandatory metadata and editorial description provided by the admin
     if payload.category:

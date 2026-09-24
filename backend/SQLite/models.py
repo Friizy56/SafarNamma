@@ -43,6 +43,7 @@ class Destination(Base):
     description = Column(Text , nullable = False )
     image_url = Column(String)
     gallery_images = Column(Text , nullable=True)
+    menu_images = Column(Text , nullable=True)
     map_link = Column(String)
     best_season = Column(String)
     budget_tier = Column(String , nullable = False)

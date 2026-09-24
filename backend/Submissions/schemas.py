@@ -25,6 +25,7 @@ class DestinationBase(BaseModel) :
     transport_options : Optional[str] = None
     nearby_facilities : Optional[str] = None
     gallery_images : Optional[List[str]] = []
+    menu_images : Optional[List[str]] = []
     is_popular_weekend : Optional[bool] = False
 
 class PresencePing(BaseModel):
@@ -44,6 +45,7 @@ class AdminApprovalPayload(BaseModel):
     nearby_facilities : Annotated[str, Field(..., min_length=1, description="Compulsory nearby facilities list for admin approval")]
     image_url : Optional[str] = None
     gallery_images : Optional[List[str]] = None
+    menu_images : Optional[List[str]] = None
 
 class DestinationCreate(DestinationBase):
     pass 
@@ -55,7 +57,7 @@ class DestinationResponse(DestinationBase):
     model_config = ConfigDict(from_attributes = True)
     #"Hey, listen to me. I am about to hand you a SQLAlchemy object, NOT a dictionary. Do not panic. Do not use brackets. I want you to read the data directly from the object's attributes using the dot notation."
 
-    @field_validator('gallery_images', mode='before')
+    @field_validator('gallery_images', 'menu_images', mode='before')
     @classmethod
     def parse_gallery(cls, v):
         if isinstance(v, str):
