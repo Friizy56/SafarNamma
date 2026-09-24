@@ -10,6 +10,15 @@ from server.database import engine, Base, get_db
 from SQLite import models
 from Submissions import schemas 
 from server.cloudinary_utils import delete_destination_cloudinary_assets
+from server.auth import (
+    CurrentUser,
+    create_session_token,
+    get_current_user,
+    get_optional_user,
+    is_admin_email,
+    require_admin,
+    verify_google_credential,
+)
 
 
 
@@ -46,6 +55,13 @@ async def health_check():
     return {"status": "ok", "message": "RoamLocal API is healthy"}
 
 
+@app.post('/api/auth/google')
+def login_with_google(payload: schemas.GoogleLoginPayload):
+    """Exchanges a verified Google ID token for a SafarNamma session token."""
+    email = verify_google_credential(payload.credential)
+    return {"token": create_session_token(email), "email": email, "is_admin": is_admin_email(email)}
+
+
 # ── Live presence ──
 # Each open tab pings every ~45s with a random session id. Anyone seen within
 # PRESENCE_WINDOW counts as "online". Kept in memory: resets on restart and is
@@ -75,6 +91,32 @@ async def presence_count():
     return {"active": active, "display": active + PRESENCE_BASELINE}
 
 
+
+
+def _get_or_create_user(db: Session, email: str) -> models.User:
+    user = db.query(models.User).filter(models.User.email.ilike(email)).first()
+    if not user:
+        user = models.User(email=email, name=email.split('@')[0], role="user")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    return user
+
+
+def _detach_destination(db: Session, dest: models.Destination) -> None:
+    """Clears rows that reference a destination so Postgres lets us delete it."""
+    db.query(models.Review).filter(models.Review.destination_id == dest.id).delete(synchronize_session=False)
+    db.query(models.Favorite).filter(models.Favorite.destination_id == dest.id).delete(synchronize_session=False)
+    # Keep travel groups planned for this place; they just remember it by name
+    for group in db.query(models.TravelGroup).filter(models.TravelGroup.destination_id == dest.id).all():
+        group.destination_id = None
+        group.custom_destination = group.custom_destination or dest.name
+    db.flush()
+
+
+def _owns_notification(notif: models.Notification, user: CurrentUser) -> bool:
+    owner = (notif.user_email or "").lower()
+    return owner == user.email or (owner == "admin" and user.is_admin)
 
 
 @app.get("/api/destinations" , response_model = List[schemas.DestinationResponse])
@@ -122,7 +164,7 @@ def get_destination(id : int , db : Session = Depends(get_db)):
 
 
 @app.post("/api/destinations" , response_model = schemas.DestinationResponse , status_code = status.HTTP_201_CREATED)
-def create_destination(destination : schemas.DestinationCreate , db : Session = Depends(get_db)):
+def create_destination(destination : schemas.DestinationCreate , db : Session = Depends(get_db) , user : CurrentUser = Depends(get_current_user)):
 
     clean_name = destination.name.strip()
 
@@ -166,9 +208,10 @@ def create_destination(destination : schemas.DestinationCreate , db : Session = 
         nearby_facilities = destination.nearby_facilities,
         gallery_images = json.dumps(destination.gallery_images) if destination.gallery_images else None,
         menu_images = json.dumps(destination.menu_images) if destination.menu_images else None,
-        is_approved = bool(destination.is_approved) if destination.is_approved is not None else False,
-        submitted_by_email = destination.submitted_by_email,
-        submission_status = destination.submission_status if destination.submission_status else ("approved" if destination.is_approved else "pending")
+        # Only admins may publish directly; everyone else goes to the review queue
+        is_approved = bool(user.is_admin and destination.is_approved),
+        submitted_by_email = user.email,
+        submission_status = "approved" if (user.is_admin and destination.is_approved) else "pending"
     )
 
     db.add(new_dest)
@@ -209,7 +252,7 @@ def review_get(destination_id : int , db : Session = Depends(get_db)):
 
 
 @app.post("/api/reviews" , response_model = schemas.ReviewResponse , status_code = status.HTTP_201_CREATED)
-def create_review(review : schemas.ReviewCreate , user_id : int = 1 , db : Session = Depends(get_db)):
+def create_review(review : schemas.ReviewCreate , db : Session = Depends(get_db) , user : CurrentUser = Depends(get_current_user)):
 
     dest = (
         db.query(models.Destination).filter(models.Destination.id == review.destination_id).first()
@@ -218,9 +261,11 @@ def create_review(review : schemas.ReviewCreate , user_id : int = 1 , db : Sessi
     if not dest :
         raise HTTPException(status_code =  404 , detail = "Destination not found")
 
+    reviewer = _get_or_create_user(db, user.email)
+
     new_review = models.Review(
         destination_id =  review.destination_id,
-        user_id =  user_id ,
+        user_id =  reviewer.id ,
         rating = review.rating , 
         comment =  review.comment , 
     )
@@ -243,7 +288,7 @@ def create_review(review : schemas.ReviewCreate , user_id : int = 1 , db : Sessi
 
 
 @app.delete("/api/destinations/{destination_id}" , status_code = status.HTTP_204_NO_CONTENT)
-def delete_destination(destination_id : int , db : Session = Depends(get_db)):
+def delete_destination(destination_id : int , db : Session = Depends(get_db) , _admin : CurrentUser = Depends(require_admin)):
 
     dest = (
         db.query(models.Destination).filter(models.Destination.id == destination_id).first()
@@ -255,13 +300,14 @@ def delete_destination(destination_id : int , db : Session = Depends(get_db)):
     # Clean up Cloudinary images (cover image + gallery images)
     delete_destination_cloudinary_assets(dest)
 
+    _detach_destination(db, dest)
     db.delete(dest)
 
     db.commit()
 
 
 @app.put("/api/destinations/{destination_id}" , response_model = schemas.DestinationResponse)
-def edit_destination(destination_id : int , destination_update: schemas.DestinationCreate , db : Session = Depends(get_db)):
+def edit_destination(destination_id : int , destination_update: schemas.DestinationCreate , db : Session = Depends(get_db) , _admin : CurrentUser = Depends(require_admin)):
 
     dest = (db.query(models.Destination).filter(models.Destination.id == destination_id).first())
 
@@ -311,7 +357,8 @@ def edit_destination(destination_id : int , destination_update: schemas.Destinat
 
 
 @app.post("/api/groups", response_model=schemas.TravelGroupResponse, status_code=status.HTTP_201_CREATED)
-def create_travel_group(group: schemas.TravelGroupCreate, db: Session = Depends(get_db)):
+def create_travel_group(group: schemas.TravelGroupCreate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    group.organizer_email = user.email
     # Verify the destination actually exists if an official destination_id was chosen
     if group.destination_id:
         dest = db.query(models.Destination).filter(models.Destination.id == group.destination_id).first()
@@ -381,7 +428,8 @@ def get_travel_groups(db: Session = Depends(get_db)):
 
 
 @app.delete("/api/groups/{group_id}", status_code=status.HTTP_200_OK)
-def delete_travel_group(group_id: int, organizer_email: str, db: Session = Depends(get_db)):
+def delete_travel_group(group_id: int, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    organizer_email = user.email
     group = db.query(models.TravelGroup).filter(models.TravelGroup.id == group_id).first()
     if not group:
         raise HTTPException(status_code=404, detail="Travel group not found")
@@ -414,7 +462,8 @@ def delete_travel_group(group_id: int, organizer_email: str, db: Session = Depen
 
 
 @app.get("/api/groups/{group_id}", response_model=schemas.TravelGroupResponse)
-def get_travel_group(group_id: int, user_email: Optional[str] = None, db: Session = Depends(get_db)):
+def get_travel_group(group_id: int, db: Session = Depends(get_db), user: Optional[CurrentUser] = Depends(get_optional_user)):
+    user_email = user.email if user else None
     group = db.query(models.TravelGroup).filter(models.TravelGroup.id == group_id).first()
     if not group:
         raise HTTPException(status_code=404, detail="Travel group not found")
@@ -445,7 +494,8 @@ def get_travel_group(group_id: int, user_email: Optional[str] = None, db: Sessio
 
 
 @app.post("/api/groups/{group_id}/requests", response_model=schemas.GroupRequestResponse, status_code=status.HTTP_201_CREATED)
-def request_to_join(group_id: int, request_data: schemas.GroupRequestCreate, db: Session = Depends(get_db)):
+def request_to_join(group_id: int, request_data: schemas.GroupRequestCreate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    request_data.user_email = user.email
 
     group = db.query(models.TravelGroup).filter(models.TravelGroup.id == group_id).first()
     
@@ -461,7 +511,7 @@ def request_to_join(group_id: int, request_data: schemas.GroupRequestCreate, db:
     # Check if already requested
     existing = db.query(models.GroupRequest).filter(
         models.GroupRequest.group_id == group_id,
-        models.GroupRequest.user_email == request_data.user_email
+        models.GroupRequest.user_email.ilike(request_data.user_email)
     ).first()
     if existing:
         raise HTTPException(status_code=400, detail=f"You already have a {existing.status} request for this group.")
@@ -499,7 +549,8 @@ def request_to_join(group_id: int, request_data: schemas.GroupRequestCreate, db:
 
 
 @app.get("/api/groups/{group_id}/requests", response_model=List[schemas.GroupRequestResponse])
-def get_group_requests(group_id: int, organizer_email: str, db: Session = Depends(get_db)):
+def get_group_requests(group_id: int, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    organizer_email = user.email
 
     group = db.query(models.TravelGroup).filter(models.TravelGroup.id == group_id).first()
 
@@ -514,7 +565,8 @@ def get_group_requests(group_id: int, organizer_email: str, db: Session = Depend
 
 
 @app.put("/api/groups/requests/{request_id}/status", response_model = schemas.GroupRequestResponse)
-def update_request_status(request_id: int, new_status: str, organizer_email: str, db: Session = Depends(get_db)):
+def update_request_status(request_id: int, new_status: str, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    organizer_email = user.email
 
     if new_status not in ["approved", "rejected"]:
         raise HTTPException(status_code=400, detail="Status must be 'approved' or 'rejected'")
@@ -569,23 +621,14 @@ def update_request_status(request_id: int, new_status: str, organizer_email: str
     return req
 
 @app.get("/api/users/profile", response_model=schemas.UserResponse)
-def get_user_profile(email: str, db: Session = Depends(get_db)):
-    """Fetches user profile by email or auto-creates a record if new."""
-    user = db.query(models.User).filter(models.User.email.ilike(email)).first()
-    if not user:
-        user = models.User(
-            email=email,
-            name=email.split('@')[0],
-            role="user"
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    return user
+def get_user_profile(db: Session = Depends(get_db), current: CurrentUser = Depends(get_current_user)):
+    """Fetches the signed-in user's profile, auto-creating a record if new."""
+    return _get_or_create_user(db, current.email)
 
 
 @app.put("/api/users/profile" , response_model = schemas.UserResponse)
-def update_user_profile(user_data : schemas.UserUpdate , db : Session = Depends(get_db)):
+def update_user_profile(user_data : schemas.UserUpdate , db : Session = Depends(get_db) , current : CurrentUser = Depends(get_current_user)):
+    user_data.email = current.email
 
     user = db.query(models.User).filter(models.User.email.ilike(user_data.email)).first()
 
@@ -615,7 +658,8 @@ def update_user_profile(user_data : schemas.UserUpdate , db : Session = Depends(
 
 
 @app.get("/api/users/submissions", response_model=List[schemas.DestinationResponse])
-def get_user_submissions(user_email: str, db: Session = Depends(get_db)):
+def get_user_submissions(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    user_email = user.email
     """Fetches all places submitted by a specific traveler."""
     return db.query(models.Destination).filter(
         models.Destination.submitted_by_email.ilike(user_email)
@@ -627,7 +671,8 @@ def get_user_submissions(user_email: str, db: Session = Depends(get_db)):
 # ==========================================
 
 @app.get("/api/favorites", response_model=List[schemas.DestinationResponse])
-def get_favorites(user_email: str, db: Session = Depends(get_db)):
+def get_favorites(db: Session = Depends(get_db), current: CurrentUser = Depends(get_current_user)):
+    user_email = current.email
     """Fetches all destinations saved as favorites by a user from the database."""
     user = db.query(models.User).filter(models.User.email.ilike(user_email)).first()
     if not user:
@@ -641,7 +686,8 @@ def get_favorites(user_email: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/favorites", status_code=status.HTTP_201_CREATED)
-def add_favorite(payload: schemas.FavoriteCreate, db: Session = Depends(get_db)):
+def add_favorite(payload: schemas.FavoriteCreate, db: Session = Depends(get_db), current: CurrentUser = Depends(get_current_user)):
+    payload.user_email = current.email
     """Saves a destination into the user's favorites in SQLite."""
     user = db.query(models.User).filter(models.User.email.ilike(payload.user_email)).first()
     if not user:
@@ -671,7 +717,8 @@ def add_favorite(payload: schemas.FavoriteCreate, db: Session = Depends(get_db))
 
 
 @app.delete("/api/favorites/{destination_id}")
-def remove_favorite(destination_id: int, user_email: str, db: Session = Depends(get_db)):
+def remove_favorite(destination_id: int, db: Session = Depends(get_db), current: CurrentUser = Depends(get_current_user)):
+    user_email = current.email
     """Removes a destination from the user's favorites in SQLite."""
     user = db.query(models.User).filter(models.User.email.ilike(user_email)).first()
     if not user:
@@ -695,13 +742,13 @@ def remove_favorite(destination_id: int, user_email: str, db: Session = Depends(
 # ==========================================
 
 @app.get("/api/admin/submissions", response_model=List[schemas.DestinationResponse])
-def get_pending_submissions(db: Session = Depends(get_db)):
+def get_pending_submissions(db: Session = Depends(get_db), _admin: CurrentUser = Depends(require_admin)):
     """Fetches all community destinations that are pending admin review."""
     return db.query(models.Destination).filter(models.Destination.submission_status == "pending").all()
 
 
 @app.put("/api/admin/submissions/{destination_id}/approve")
-def approve_submission(destination_id: int, payload: schemas.AdminApprovalPayload, db: Session = Depends(get_db)):
+def approve_submission(destination_id: int, payload: schemas.AdminApprovalPayload, db: Session = Depends(get_db), _admin: CurrentUser = Depends(require_admin)):
     """Approves a community submission and enriches it with mandatory curated metadata."""
     dest = db.query(models.Destination).filter(models.Destination.id == destination_id).first()
     if not dest:
@@ -753,7 +800,7 @@ def approve_submission(destination_id: int, payload: schemas.AdminApprovalPayloa
 
 
 @app.delete("/api/admin/submissions/{destination_id}/reject")
-def reject_submission(destination_id: int, db: Session = Depends(get_db)):
+def reject_submission(destination_id: int, db: Session = Depends(get_db), _admin: CurrentUser = Depends(require_admin)):
     """Rejects a pending submission, notifies the submitter, and removes the destination."""
     dest = db.query(models.Destination).filter(models.Destination.id == destination_id).first()
     if not dest:
@@ -774,13 +821,14 @@ def reject_submission(destination_id: int, db: Session = Depends(get_db)):
     delete_destination_cloudinary_assets(dest)
 
     # 3. Delete destination from table
+    _detach_destination(db, dest)
     db.delete(dest)
     db.commit()
     return {"message": "Submission rejected and removed.", "id": destination_id}
 
 
 @app.put("/api/admin/popular-weekend")
-def set_popular_weekend_destinations(payload: schemas.PopularWeekendPayload, db: Session = Depends(get_db)):
+def set_popular_weekend_destinations(payload: schemas.PopularWeekendPayload, db: Session = Depends(get_db), _admin: CurrentUser = Depends(require_admin)):
     """Admin curates 3 to 5 destinations to feature on the homepage under 'Popular this weekend'."""
     ids = list(dict.fromkeys(payload.destination_ids))  # preserve order & deduplicate
     if len(ids) < 3 or len(ids) > 5:
@@ -820,7 +868,8 @@ def set_popular_weekend_destinations(payload: schemas.PopularWeekendPayload, db:
 # ==========================================
 
 @app.get("/api/notifications", response_model=schemas.NotificationListResponse)
-def get_notifications(user_email: str, is_admin: bool = False, db: Session = Depends(get_db)):
+def get_notifications(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    user_email, is_admin = user.email, user.is_admin
     """Fetches user notifications and admin moderation alerts."""
     if is_admin:
         query = db.query(models.Notification).filter(
@@ -839,17 +888,18 @@ def get_notifications(user_email: str, is_admin: bool = False, db: Session = Dep
 
 
 @app.put("/api/notifications/{notification_id}/read")
-def mark_notification_read(notification_id: int, db: Session = Depends(get_db)):
+def mark_notification_read(notification_id: int, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Marks a single notification as read."""
     notif = db.query(models.Notification).filter(models.Notification.id == notification_id).first()
-    if notif:
+    if notif and _owns_notification(notif, user):
         notif.is_read = True
         db.commit()
     return {"status": "success"}
 
 
 @app.put("/api/notifications/read-all")
-def mark_all_notifications_read(user_email: str, is_admin: bool = False, db: Session = Depends(get_db)):
+def mark_all_notifications_read(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    user_email, is_admin = user.email, user.is_admin
     """Marks all notifications as read for a user or admin."""
     if is_admin:
         query = db.query(models.Notification).filter(
@@ -864,7 +914,8 @@ def mark_all_notifications_read(user_email: str, is_admin: bool = False, db: Ses
 
 
 @app.delete("/api/notifications/clear-all")
-def clear_all_notifications(user_email: str, is_admin: bool = False, db: Session = Depends(get_db)):
+def clear_all_notifications(db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
+    user_email, is_admin = user.email, user.is_admin
     """Deletes/clears all notifications for a user or admin from the database."""
     if is_admin:
         query = db.query(models.Notification).filter(
@@ -879,10 +930,10 @@ def clear_all_notifications(user_email: str, is_admin: bool = False, db: Session
 
 
 @app.delete("/api/notifications/{notification_id}")
-def delete_notification(notification_id: int, db: Session = Depends(get_db)):
+def delete_notification(notification_id: int, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     """Deletes a single notification from the database."""
     notif = db.query(models.Notification).filter(models.Notification.id == notification_id).first()
-    if notif:
+    if notif and _owns_notification(notif, user):
         db.delete(notif)
         db.commit()
     return {"status": "success"}

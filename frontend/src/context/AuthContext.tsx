@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { User } from '../types';
-import { userApi } from '../api/client';
+import { userApi, TOKEN_KEY, AUTH_EXPIRED_EVENT } from '../api/client';
+
+const SESSION_TOKEN_PREFIX = 'sn1.';
 
 // Helper function to verify if an email has admin privileges
 export const isAdminEmail = (email?: string): boolean => {
@@ -27,6 +29,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(() => {
     // Read from localStorage IMMEDIATELY for instant first-paint
     const storedUser = localStorage.getItem('roamlocal_user');
+    // Sessions from before server-side auth hold a raw Google token the backend
+    // won't accept; drop them so the user signs in once more
+    if (storedUser && !localStorage.getItem(TOKEN_KEY)?.startsWith(SESSION_TOKEN_PREFIX)) {
+      localStorage.removeItem('roamlocal_user');
+      localStorage.removeItem(TOKEN_KEY);
+      return null;
+    }
     if (storedUser) {
       try {
         const parsed: User = JSON.parse(storedUser);
@@ -82,7 +91,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const verifiedRole = isAdminEmail(userData.email) ? 'admin' : 'user';
     const sanitizedUser: User = { ...userData, role: verifiedRole };
     
-    localStorage.setItem('roamlocal_token', token);
+    localStorage.setItem(TOKEN_KEY, token);
 
     // Immediately consult SQLite to hydrate custom bio and avatar before rendering
     try {
@@ -103,8 +112,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const logout = () => {
     setUser(null);
     localStorage.removeItem('roamlocal_user');
-    localStorage.removeItem('roamlocal_token');
+    localStorage.removeItem(TOKEN_KEY);
   };
+
+  // Backend rejected the session (expired or invalid): sign out so the user can log in again
+  useEffect(() => {
+    const onExpired = () => logout();
+    window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+  }, []);
 
   const updateUser = async (updatedData : Partial<User>) => {
     if(!user) return ; 

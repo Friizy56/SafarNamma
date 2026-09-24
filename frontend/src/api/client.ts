@@ -7,11 +7,44 @@ export { PLACE_CATEGORIES };
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/";
 
+export const TOKEN_KEY = 'roamlocal_token';
+// Fired when the backend rejects our session so AuthContext can sign the user out
+export const AUTH_EXPIRED_EVENT = 'auth:expired';
+
+// Every request carries the session token; the backend decides who the caller is from it
+const apiFetch = async (url: string, init: RequestInit = {}): Promise<Response> => {
+  let token: string | null = null;
+  try {
+    token = localStorage.getItem(TOKEN_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+  const headers = new Headers(init.headers);
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  const response = await fetch(url, { ...init, headers });
+  if (response.status === 401 && token) window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+  return response;
+};
+
+export const authApi = {
+  // Trades the Google ID token for our own session token (verified server-side)
+  loginWithGoogle: async (credential: string): Promise<{ token: string; email: string; is_admin: boolean }> => {
+    const response = await fetch(`${BASE_URL}api/auth/google`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || 'Sign-in failed. Please try again.');
+    return data;
+  },
+};
+
 export const placesApi = {
   getPlaces: async (filters?: { category?: string; maxPrice?: number }): Promise<Place[]> => {
 
     // 1. Fetch from your real FastAPI backend!
-    const response = await fetch(`${BASE_URL}api/destinations`);
+    const response = await apiFetch(`${BASE_URL}api/destinations`);
     const data = await response.json();
     // 2. Set result to the data we got from Python
     let result = data;
@@ -27,7 +60,7 @@ export const placesApi = {
 
   getPopularWeekend: async (): Promise<Place[]> => {
     try {
-      const response = await fetch(`${BASE_URL}api/destinations/popular-weekend`);
+      const response = await apiFetch(`${BASE_URL}api/destinations/popular-weekend`);
       if (!response.ok) return [];
       return await response.json();
     } catch (error) {
@@ -37,7 +70,7 @@ export const placesApi = {
   },
 
   getPlaceById: async (id: string): Promise<Place | undefined> => {
-    const response = await fetch(`${BASE_URL}api/destinations/${id}`)
+    const response = await apiFetch(`${BASE_URL}api/destinations/${id}`)
 
     if (!response.ok) {
       return undefined
@@ -48,7 +81,7 @@ export const placesApi = {
 
   deletePlace: async (id: number): Promise<boolean> => {
     try {
-      const response = await fetch(`${BASE_URL}api/destinations/${id}`, {
+      const response = await apiFetch(`${BASE_URL}api/destinations/${id}`, {
         method: 'DELETE',
       });
       return response.ok;
@@ -60,7 +93,7 @@ export const placesApi = {
 
   editPlace: async (id: number, data: any): Promise<boolean> => {
     try {
-      const response = await fetch(`${BASE_URL}api/destinations/${id}`, {
+      const response = await apiFetch(`${BASE_URL}api/destinations/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -76,7 +109,7 @@ export const placesApi = {
 
   createPlace: async (data: any): Promise<Place | null> => {
     try {
-      const response = await fetch(`${BASE_URL}api/destinations`, {
+      const response = await apiFetch(`${BASE_URL}api/destinations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -101,7 +134,7 @@ export const groupsApi = {
   // 1. Fetch all travel groups
   getGroups: async (): Promise<Group[]> => {
     try {
-      const response = await fetch(`${BASE_URL}api/groups`);
+      const response = await apiFetch(`${BASE_URL}api/groups`);
       if (!response.ok) return [];
       return await response.json();
     } catch (error) {
@@ -116,7 +149,7 @@ export const groupsApi = {
       const url = userEmail
         ? `${BASE_URL}api/groups/${id}?user_email=${encodeURIComponent(userEmail)}`
         : `${BASE_URL}api/groups/${id}`;
-      const response = await fetch(url);
+      const response = await apiFetch(url);
       if (!response.ok) return undefined;
       return await response.json();
     } catch (error) {
@@ -128,7 +161,7 @@ export const groupsApi = {
   // 3. Create a new group
   createGroup: async (data: Omit<Group, 'id' | 'current_members' | 'status' | 'created_at'>): Promise<Group | null> => {
     try {
-      const response = await fetch(`${BASE_URL}api/groups`, {
+      const response = await apiFetch(`${BASE_URL}api/groups`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -147,7 +180,7 @@ export const groupsApi = {
   // 4. Request to join a group
   requestToJoin: async (groupId: number, userName: string, userEmail: string): Promise<GroupRequest | null> => {
     try {
-      const response = await fetch(`${BASE_URL}api/groups/${groupId}/requests`, {
+      const response = await apiFetch(`${BASE_URL}api/groups/${groupId}/requests`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ group_id: groupId, user_name: userName, user_email: userEmail })
@@ -166,7 +199,7 @@ export const groupsApi = {
   // 5. Organizer gets pending requests
   getRequests: async (groupId: number, organizerEmail: string): Promise<GroupRequest[]> => {
     try {
-      const response = await fetch(`${BASE_URL}api/groups/${groupId}/requests?organizer_email=${encodeURIComponent(organizerEmail)}`);
+      const response = await apiFetch(`${BASE_URL}api/groups/${groupId}/requests?organizer_email=${encodeURIComponent(organizerEmail)}`);
       if (!response.ok) return [];
       return await response.json();
     } catch (error) {
@@ -178,7 +211,7 @@ export const groupsApi = {
   // 6. Organizer approves (✅) or rejects (❌) a request
   updateRequestStatus: async (requestId: number, newStatus: 'approved' | 'rejected', organizerEmail: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${BASE_URL}api/groups/requests/${requestId}/status?new_status=${newStatus}&organizer_email=${encodeURIComponent(organizerEmail)}`, {
+      const response = await apiFetch(`${BASE_URL}api/groups/requests/${requestId}/status?new_status=${newStatus}&organizer_email=${encodeURIComponent(organizerEmail)}`, {
         method: 'PUT'
       });
       return response.ok;
@@ -191,7 +224,7 @@ export const groupsApi = {
   // 7. Organizer deletes the group (enforcing 2-hour cooldown and ownership)
   deleteGroup: async (groupId: number, organizerEmail: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${BASE_URL}api/groups/${groupId}?organizer_email=${encodeURIComponent(organizerEmail)}`, {
+      const response = await apiFetch(`${BASE_URL}api/groups/${groupId}?organizer_email=${encodeURIComponent(organizerEmail)}`, {
         method: 'DELETE',
       });
       if (!response.ok) {
@@ -210,7 +243,7 @@ export const submissionsApi = {
   submitPlace: async (data: any): Promise<boolean> => {
     try {
 
-      const response = await fetch(`${BASE_URL}api/destinations`, {
+      const response = await apiFetch(`${BASE_URL}api/destinations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -233,7 +266,7 @@ export const submissionsApi = {
   },
   getPendingSubmissions: async (): Promise<Place[]> => {
     try {
-      const response = await fetch(`${BASE_URL}api/admin/submissions`);
+      const response = await apiFetch(`${BASE_URL}api/admin/submissions`);
       if (!response.ok) {
         console.error("Failed to fetch pending submissions:", response.statusText);
         return [];
@@ -262,7 +295,7 @@ export const submissionsApi = {
     }
   ): Promise<boolean> => {
     try {
-      const response = await fetch(`${BASE_URL}api/admin/submissions/${id}/approve`, {
+      const response = await apiFetch(`${BASE_URL}api/admin/submissions/${id}/approve`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -278,7 +311,7 @@ export const submissionsApi = {
 
   rejectSubmission: async (id: number | string): Promise<boolean> => {
     try {
-      const response = await fetch(`${BASE_URL}api/admin/submissions/${id}/reject`, {
+      const response = await apiFetch(`${BASE_URL}api/admin/submissions/${id}/reject`, {
         method: 'DELETE'
       });
       return response.ok;
@@ -290,7 +323,7 @@ export const submissionsApi = {
 
   getUserSubmissions: async (userEmail: string): Promise<Place[]> => {
     try {
-      const response = await fetch(`${BASE_URL}api/users/submissions?user_email=${encodeURIComponent(userEmail)}`);
+      const response = await apiFetch(`${BASE_URL}api/users/submissions?user_email=${encodeURIComponent(userEmail)}`);
       if (!response.ok) return [];
       return await response.json();
     } catch (error) {
@@ -301,7 +334,7 @@ export const submissionsApi = {
 
   setPopularWeekend: async (destinationIds: number[]): Promise<boolean> => {
     try {
-      const response = await fetch(`${BASE_URL}api/admin/popular-weekend`, {
+      const response = await apiFetch(`${BASE_URL}api/admin/popular-weekend`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ destination_ids: destinationIds })
@@ -327,7 +360,7 @@ export const reviewApi = {
   getReviews: async (destination_id: number): Promise<Review[]> => {
 
     try {
-      const response = await fetch(`${BASE_URL}api/destinations/${destination_id}/reviews`);
+      const response = await apiFetch(`${BASE_URL}api/destinations/${destination_id}/reviews`);
 
       if (!response.ok) {
         console.error("Failed to fetch reviews:", response.statusText);
@@ -350,7 +383,7 @@ export const reviewApi = {
 
   createReview: async (data: { destination_id: number; rating: number; comment: string }): Promise<Review> => {
     try {
-      const response = await fetch(`${BASE_URL}api/reviews`, {
+      const response = await apiFetch(`${BASE_URL}api/reviews`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -376,7 +409,7 @@ export const reviewApi = {
 export const notificationsApi = {
   getNotifications: async (userEmail: string, isAdmin: boolean = false): Promise<{ unread_count: number; notifications: AppNotification[] }> => {
     try {
-      const response = await fetch(`${BASE_URL}api/notifications?user_email=${encodeURIComponent(userEmail)}&is_admin=${isAdmin}`);
+      const response = await apiFetch(`${BASE_URL}api/notifications?user_email=${encodeURIComponent(userEmail)}&is_admin=${isAdmin}`);
       if (!response.ok) return { unread_count: 0, notifications: [] };
       return await response.json();
     } catch (error) {
@@ -387,7 +420,7 @@ export const notificationsApi = {
 
   markAsRead: async (notificationId: number): Promise<boolean> => {
     try {
-      const response = await fetch(`${BASE_URL}api/notifications/${notificationId}/read`, {
+      const response = await apiFetch(`${BASE_URL}api/notifications/${notificationId}/read`, {
         method: 'PUT'
       });
       return response.ok;
@@ -399,7 +432,7 @@ export const notificationsApi = {
 
   markAllAsRead: async (userEmail: string, isAdmin: boolean = false): Promise<boolean> => {
     try {
-      const response = await fetch(`${BASE_URL}api/notifications/read-all?user_email=${encodeURIComponent(userEmail)}&is_admin=${isAdmin}`, {
+      const response = await apiFetch(`${BASE_URL}api/notifications/read-all?user_email=${encodeURIComponent(userEmail)}&is_admin=${isAdmin}`, {
         method: 'PUT'
       });
       return response.ok;
@@ -411,7 +444,7 @@ export const notificationsApi = {
 
   clearAll: async (userEmail: string, isAdmin: boolean = false): Promise<boolean> => {
     try {
-      const response = await fetch(`${BASE_URL}api/notifications/clear-all?user_email=${encodeURIComponent(userEmail)}&is_admin=${isAdmin}`, {
+      const response = await apiFetch(`${BASE_URL}api/notifications/clear-all?user_email=${encodeURIComponent(userEmail)}&is_admin=${isAdmin}`, {
         method: 'DELETE'
       });
       return response.ok;
@@ -423,7 +456,7 @@ export const notificationsApi = {
 
   deleteNotification: async (notificationId: number): Promise<boolean> => {
     try {
-      const response = await fetch(`${BASE_URL}api/notifications/${notificationId}`, {
+      const response = await apiFetch(`${BASE_URL}api/notifications/${notificationId}`, {
         method: 'DELETE'
       });
       return response.ok;
@@ -437,7 +470,7 @@ export const notificationsApi = {
 export const userApi = {
   getProfile: async (email: string): Promise<{ id: number; email: string; name?: string; avatar?: string; bio?: string; role: string; created_at?: string } | null> => {
     try {
-      const response = await fetch(`${BASE_URL}api/users/profile?email=${encodeURIComponent(email)}`);
+      const response = await apiFetch(`${BASE_URL}api/users/profile?email=${encodeURIComponent(email)}`);
       if (!response.ok) return null;
       return await response.json();
     } catch (error) {
@@ -448,7 +481,7 @@ export const userApi = {
 
   updateProfile: async (data: { email: string; name?: string; avatar?: string; bio?: string }): Promise<boolean> => {
     try {
-      const response = await fetch(`${BASE_URL}api/users/profile`, {
+      const response = await apiFetch(`${BASE_URL}api/users/profile`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -464,7 +497,7 @@ export const userApi = {
 export const favoritesApi = {
   getFavorites: async (userEmail: string): Promise<Place[]> => {
     try {
-      const response = await fetch(`${BASE_URL}api/favorites?user_email=${encodeURIComponent(userEmail)}`);
+      const response = await apiFetch(`${BASE_URL}api/favorites?user_email=${encodeURIComponent(userEmail)}`);
       if (!response.ok) return [];
       return await response.json();
     } catch (error) {
@@ -475,7 +508,7 @@ export const favoritesApi = {
 
   addFavorite: async (destinationId: number, userEmail: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${BASE_URL}api/favorites`, {
+      const response = await apiFetch(`${BASE_URL}api/favorites`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -492,7 +525,7 @@ export const favoritesApi = {
 
   removeFavorite: async (destinationId: number, userEmail: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${BASE_URL}api/favorites/${destinationId}?user_email=${encodeURIComponent(userEmail)}`, {
+      const response = await apiFetch(`${BASE_URL}api/favorites/${destinationId}?user_email=${encodeURIComponent(userEmail)}`, {
         method: 'DELETE'
       });
       return response.ok;
@@ -508,7 +541,7 @@ export const presenceApi = {
   // Heartbeat: tells the backend this tab is open; returns the live count
   ping: async (sessionId: string): Promise<number | null> => {
     try {
-      const response = await fetch(`${BASE_URL}api/presence`, {
+      const response = await apiFetch(`${BASE_URL}api/presence`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId }),

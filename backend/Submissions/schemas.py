@@ -28,6 +28,9 @@ class DestinationBase(BaseModel) :
     menu_images : Optional[List[str]] = []
     is_popular_weekend : Optional[bool] = False
 
+class GoogleLoginPayload(BaseModel):
+    credential : Annotated[str, Field(..., min_length=10, max_length=4096)]
+
 class PresencePing(BaseModel):
     session_id : Annotated[str, Field(..., min_length=8, max_length=64)]
 

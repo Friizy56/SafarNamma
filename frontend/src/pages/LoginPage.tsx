@@ -4,6 +4,7 @@ import { LogIn, Compass } from 'lucide-react';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import { useAuth, isAdminEmail } from '../context/AuthContext';
+import { authApi } from '../api/client';
 
 export const LoginPage = () => {
   const navigate = useNavigate();
@@ -23,7 +24,9 @@ export const LoginPage = () => {
         return;
       }
 
-      const assignedRole = isAdminEmail(userEmail) ? ('admin' as const) : ('user' as const);
+      // The backend verifies the Google token and issues our session token
+      const session = await authApi.loginWithGoogle(credentialResponse.credential);
+      const assignedRole = session.is_admin && isAdminEmail(userEmail) ? ('admin' as const) : ('user' as const);
 
       const user = {
         id: decodedToken.sub,
@@ -34,10 +37,10 @@ export const LoginPage = () => {
         created_at: new Date().toISOString(),
       };
 
-      await login(user, credentialResponse.credential);
+      await login(user, session.token);
       navigate(from, { replace: true });
     } catch (err) {
-      setError('Failed to process Google login.');
+      setError(err instanceof Error && err.message ? err.message : 'Failed to process Google login.');
     }
   };
 
