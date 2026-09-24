@@ -26,6 +26,19 @@ const apiFetch = async (url: string, init: RequestInit = {}): Promise<Response> 
   return response;
 };
 
+// FastAPI returns validation errors as a list of objects; turn any detail into readable text
+const errorMessage = (detail: unknown, fallback: string): string => {
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    const msgs = detail.map((d) => {
+      const field = Array.isArray(d?.loc) ? d.loc[d.loc.length - 1] : null;
+      return field ? `${field}: ${d?.msg}` : d?.msg;
+    }).filter(Boolean);
+    if (msgs.length) return msgs.join('; ');
+  }
+  return fallback;
+};
+
 export const authApi = {
   // Trades the Google ID token for our own session token (verified server-side)
   loginWithGoogle: async (credential: string): Promise<{ token: string; email: string; is_admin: boolean }> => {
@@ -35,7 +48,7 @@ export const authApi = {
       body: JSON.stringify({ credential }),
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.detail || 'Sign-in failed. Please try again.');
+    if (!response.ok) throw new Error(errorMessage(data.detail, 'Sign-in failed. Please try again.'));
     return data;
   },
 };
@@ -168,7 +181,7 @@ export const groupsApi = {
       });
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.detail || 'Failed to create group');
+        throw new Error(errorMessage(err.detail, 'Failed to create group'));
       }
       return await response.json();
     } catch (error) {
@@ -187,7 +200,7 @@ export const groupsApi = {
       });
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.detail || 'Failed to send join request');
+        throw new Error(errorMessage(err.detail, 'Failed to send join request'));
       }
       return await response.json();
     } catch (error) {
@@ -229,7 +242,7 @@ export const groupsApi = {
       });
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.detail || 'Failed to delete group');
+        throw new Error(errorMessage(err.detail, 'Failed to delete group'));
       }
       return true;
     } catch (error) {
@@ -255,7 +268,7 @@ export const submissionsApi = {
         return true;
       } else {
         const err = await response.json();
-        const msg = err.detail || 'Backend rejected the submission';
+        const msg = errorMessage(err.detail, 'Backend rejected the submission');
         console.error("Backend rejected the submission:", msg);
         throw new Error(msg);
       }
@@ -341,7 +354,7 @@ export const submissionsApi = {
       });
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.detail || 'Failed to update popular weekend destinations');
+        throw new Error(errorMessage(err.detail, 'Failed to update popular weekend destinations'));
       }
       return true;
     } catch (error) {
@@ -393,7 +406,7 @@ export const reviewApi = {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.detail || "Failed to submit review")
+        throw new Error(errorMessage(errorData.detail, "Failed to submit review"))
       }
 
       return await response.json();

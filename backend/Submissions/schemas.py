@@ -117,8 +117,9 @@ class TravelGroupCreate(BaseModel):
 
     destination_id : Optional[int] = None
     custom_destination : Optional[str] = None
-    organizer_name : str 
-    organizer_email : str 
+    # Filled in server-side from the signed-in user
+    organizer_name : Optional[str] = None
+    organizer_email : Optional[str] = None
     title : str 
     description : str 
     trip_date : datetime 

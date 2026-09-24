@@ -359,6 +359,8 @@ def edit_destination(destination_id : int , destination_update: schemas.Destinat
 @app.post("/api/groups", response_model=schemas.TravelGroupResponse, status_code=status.HTTP_201_CREATED)
 def create_travel_group(group: schemas.TravelGroupCreate, db: Session = Depends(get_db), user: CurrentUser = Depends(get_current_user)):
     group.organizer_email = user.email
+    profile = db.query(models.User).filter(models.User.email == user.email).first()
+    group.organizer_name = (profile.name if profile and profile.name else None) or group.organizer_name or user.email.split("@")[0]
     # Verify the destination actually exists if an official destination_id was chosen
     if group.destination_id:
         dest = db.query(models.Destination).filter(models.Destination.id == group.destination_id).first()
