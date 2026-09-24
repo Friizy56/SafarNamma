@@ -25,8 +25,8 @@ import { PLACE_CATEGORIES } from '../types';
 import { categoryIcon } from '../utils/categories';
 import { photoProps } from '../utils/images';
 import { cn } from '../utils/cn';
-import { OPEN_24_7, isOpen247 } from '../utils/hours';
-import { Open247Toggle } from '../components/ui/Open247Toggle';
+import { hoursMarker, hoursMode } from '../utils/hours';
+import { HoursModeToggles } from '../components/ui/Open247Toggle';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -141,7 +141,7 @@ export const SubmitPlacePage = () => {
     }
   }, [form.category]);
 
-  const open247 = isOpen247(form.opening_hours, form.closing_hours);
+  const timingMode = hoursMode(form.opening_hours, form.closing_hours);
   const requiredDone = REQUIRED_STEPS.every((s) => s.done(form));
   const doneCount = REQUIRED_STEPS.filter((s) => s.done(form)).length;
 
@@ -603,11 +603,19 @@ export const SubmitPlacePage = () => {
 
                                       {x.key === 'practical' && (
                                         <div className="space-y-4">
-                                          <Open247Toggle
-                                            checked={open247}
-                                            onChange={(on) => setForm((f) => ({ ...f, opening_hours: on ? OPEN_24_7 : '', closing_hours: on ? OPEN_24_7 : '' }))}
+                                          <HoursModeToggles
+                                            mode={timingMode}
+                                            onChange={(m) => {
+                                              const v = m === 'times' ? '' : hoursMarker(m);
+                                              setForm((f) => ({ ...f, opening_hours: v, closing_hours: v }));
+                                            }}
                                           />
-                                          {!open247 && (
+                                          {timingMode === 'description' && (
+                                            <p className="field-hint -mt-1">
+                                              Write the timings in <strong className="text-ink">Describe it</strong> above, e.g. “Morning 6–9 AM, evening 5:30–7 PM”.
+                                            </p>
+                                          )}
+                                          {timingMode === 'times' && (
                                             <div className="grid sm:grid-cols-2 gap-4">
                                               <div>
                                                 <label htmlFor="opening_hours" className="field-label">Opens at</label>

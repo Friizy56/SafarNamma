@@ -36,7 +36,7 @@ import { Reveal, RevealItem } from '../components/motion/Reveal';
 import { fallbackPhoto } from '../utils/images';
 import { formatBudget, shortLocation } from '../utils/format';
 import { categoryIcon } from '../utils/categories';
-import { isOpen247 } from '../utils/hours';
+import { isHoursInDescription, isOpen247 } from '../utils/hours';
 
 const formatTime = (timeStr?: string) => {
   if (!timeStr) return '';
@@ -51,6 +51,7 @@ const formatTime = (timeStr?: string) => {
 const formatVisitingHours = (open?: string, close?: string) => {
   if (!open && !close) return 'Hours not listed';
   if (isOpen247(open, close)) return 'Open 24/7';
+  if (isHoursInDescription(open, close)) return 'Check description';
   if (open && close) {
     return `${formatTime(open)} – ${formatTime(close)}`;
   }
@@ -295,7 +296,21 @@ export const PlaceDetailsPage = () => {
     { icon: IndianRupee, label: 'Budget', value: formatBudget(place.budget_tier) },
     { icon: CalendarDays, label: 'Best time', value: place.best_season || 'All year' },
     { icon: Hourglass, label: 'Time needed', value: place.duration || 'Flexible' },
-    { icon: Clock, label: 'Hours', value: hours },
+    {
+      icon: Clock,
+      label: 'Hours',
+      value: isHoursInDescription(place.opening_hours, place.closing_hours) ? (
+        <button
+          type="button"
+          onClick={() => document.getElementById('place-story')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          className="text-left underline decoration-accent/50 underline-offset-4 hover:text-accent-text transition-colors"
+        >
+          Check description
+        </button>
+      ) : (
+        hours
+      ),
+    },
     { icon: CategoryIcon, label: 'Category', value: place.category },
   ];
 
@@ -416,7 +431,7 @@ export const PlaceDetailsPage = () => {
       <div className="max-w-7xl mx-auto px-page pt-24 pb-24 grid lg:grid-cols-[minmax(0,1fr)_380px] gap-14 lg:gap-20">
         <div className="min-w-0 space-y-24">
           {/* About */}
-          <section>
+          <section id="place-story" className="scroll-mt-32">
             <Reveal>
               <p className="section-label mb-5">The story</p>
             </Reveal>

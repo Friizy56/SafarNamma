@@ -29,8 +29,8 @@ import { ImageUploader } from '../components/ImageUploader';
 import { MenuUploader } from '../components/MenuUploader';
 import { setScrollLocked } from '../hooks/useLenis';
 import { Link } from 'react-router-dom';
-import { OPEN_24_7, isOpen247 } from '../utils/hours';
-import { Open247Toggle } from '../components/ui/Open247Toggle';
+import { hoursMarker, hoursMode } from '../utils/hours';
+import { HoursModeToggles } from '../components/ui/Open247Toggle';
 
 export const AdminDashboard = () => {
   // Navigation Tab: 'submissions' | 'weekend'
@@ -845,14 +845,21 @@ export const AdminDashboard = () => {
               <div className="pt-2 border-t border-gray-100">
                 <p className="text-xs font-bold text-[#1a4731] uppercase tracking-wider mb-3">Practical Details (Compulsory for Admin)</p>
                 <div className="space-y-3">
-                  <Open247Toggle
-                    id="curation-open-24-7"
-                    checked={isOpen247(curationForm.opening_hours, curationForm.closing_hours)}
-                    onChange={(on) =>
-                      setCurationForm({ ...curationForm, opening_hours: on ? OPEN_24_7 : '09:00', closing_hours: on ? OPEN_24_7 : '21:00' })
+                  <HoursModeToggles
+                    idPrefix="curation-hours"
+                    mode={hoursMode(curationForm.opening_hours, curationForm.closing_hours)}
+                    onChange={(m) =>
+                      setCurationForm({
+                        ...curationForm,
+                        opening_hours: m === 'times' ? '09:00' : hoursMarker(m),
+                        closing_hours: m === 'times' ? '21:00' : hoursMarker(m),
+                      })
                     }
                   />
-                  {!isOpen247(curationForm.opening_hours, curationForm.closing_hours) && (
+                  {hoursMode(curationForm.opening_hours, curationForm.closing_hours) === 'description' && (
+                    <p className="text-xs text-gray-500">Make sure the Editorial Description below includes the timings.</p>
+                  )}
+                  {hoursMode(curationForm.opening_hours, curationForm.closing_hours) === 'times' && (
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
