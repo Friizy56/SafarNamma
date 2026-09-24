@@ -192,7 +192,7 @@ export const GroupDetailsPage = () => {
   }
 
   const isOrganizer = user && user.email.toLowerCase() === group.organizer_email.toLowerCase();
-  const isApprovedMember = Boolean(group.chat_link && !isOrganizer);
+  const isApprovedMember = !isOrganizer && (myRequestStatus === 'approved' || Boolean(group.chat_link));
   const isWhatsApp = group.chat_link?.includes('whatsapp.com') || group.chat_link?.includes('wa.me');
   const isTelegram = group.chat_link?.includes('t.me') || group.chat_link?.includes('telegram.me');
 
@@ -446,12 +446,13 @@ export const GroupDetailsPage = () => {
                     <p className="text-[11px] text-muted text-center mt-3 leading-relaxed">Hosts can delete a trip 2 hours after creating it, so plans stay stable for people who joined.</p>
                   </div>
                 </div>
-              ) : isApprovedMember && group.chat_link ? (
+              ) : isApprovedMember ? (
                 /* Case 2: Approved: reveal the WhatsApp / Telegram link */
                 <div className="space-y-3">
                   <div className="rounded-2xl bg-[#DDEEE4] text-[#1F5C42] p-3.5 text-sm font-semibold flex items-center justify-center gap-2">
                     <PartyPopper className="w-4 h-4" /> You're in! The host approved you.
                   </div>
+                  {group.chat_link ? (
                   <a
                     href={group.chat_link}
                     target="_blank"
@@ -462,6 +463,9 @@ export const GroupDetailsPage = () => {
                     {isWhatsApp ? 'Join WhatsApp group' : isTelegram ? 'Join Telegram chat' : 'Open group chat'}
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
+                  ) : (
+                    <p className="text-xs text-muted text-center leading-relaxed">The host hasn't added a group chat link yet. Check back soon.</p>
+                  )}
                 </div>
               ) : myRequestStatus === 'pending' ? (
                 /* Case 3: Request pending */
